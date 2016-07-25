@@ -61,7 +61,7 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
-    <IncludePath>/usr/include/libxml2;$(IncludePath)</IncludePath>
+    <IncludePath>/usr/include/libxml2;H:\linuxincludes;H:\linuxincludes\libxml2;H:\linuxincludes\arm-linux-gnueabihf;$(IncludePath)</IncludePath>
     <TargetExt />
   </PropertyGroup>
   <ItemGroup>
@@ -70,7 +70,6 @@
     <ClCompile Include="framer.c" />
     <ClCompile Include="io.c" />
     <ClCompile Include="parser.c" />
-    <ClCompile Include="semaphore.c" />
     <ClCompile Include="socket.c" />
     <ClCompile Include="unit.c" />
     <ClCompile Include="vcontrold.c" />
@@ -83,24 +82,19 @@
     <ClInclude Include="io.h" />
     <ClInclude Include="parser.h" />
     <ClInclude Include="prompt.h" />
-    <ClInclude Include="semaphore.h" />
     <ClInclude Include="socket.h" />
     <ClInclude Include="unit.h" />
-    <ClInclude Include="vclient.h" />
     <ClInclude Include="xmlconfig.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <ClCompile>
       <PreprocessorDefinitions>
       </PreprocessorDefinitions>
-      <ShowIncludes>false</ShowIncludes>
-      <Verbose>false</Verbose>
       <CLanguageStandard>Default</CLanguageStandard>
       <CppLanguageStandard>Default</CppLanguageStandard>
-      <RuntimeTypeInfo>false</RuntimeTypeInfo>
     </ClCompile>
     <Link>
-      <LibraryDependencies>xml2</LibraryDependencies>
+      <LibraryDependencies>xml2;pthread</LibraryDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -55,7 +55,7 @@ if test "x$XML2_LIBS" = "x"; then
 	AC_MSG_ERROR([XML2 libraries not found.  Use --with-xml2-lib-dir=<path>])
 fi
 # don't forget to add xml2 to the list of libraries
-LIBS="-lxml2 $LIBS"
+LIBS="-lxml2 -lpthread $LIBS"
 
 # Checks for header files.
 AC_HEADER_STDC
