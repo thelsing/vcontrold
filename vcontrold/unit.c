@@ -276,10 +276,10 @@ int procGetUnit(unitPtr uPtr, char *recvBuf, int recvLen, char *result, char bit
     char buffer[MAXBUF];
     char *errPtr = error;
     /* 	short t; */
-    float erg;
+    double erg;
     int ergI;
     char formatI[20];
-    float floatV = 0;
+    double floatV = 0;
     char *inPtr;
     char *tPtr;
     /* hier die Typen fuer die Umrechnung in <type> Tag */
@@ -339,40 +339,40 @@ int procGetUnit(unitPtr uPtr, char *recvBuf, int recvLen, char *result, char bit
 
     if (strstr(uPtr->type, "char") == uPtr->type) { /* Umrechnung in Char 1Byte */
         memcpy(&charV, recvBuf, 1);
-        floatV = charV; /* impliziete Typumnwandlung nach float fuer unsere Arithmetic */
+        floatV = charV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
         sprintf(formatI, "%%02X %%s");
     }
     else if (strstr(uPtr->type, "uchar") == uPtr->type) { /* Umrechnung in Unsigned Char 1Byte */
         memcpy(&ucharV, recvBuf, 1);
-        floatV = ucharV; /* impliziete Typumnwandlung nach float fuer unsere Arithmetic */
+        floatV = ucharV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
         sprintf(formatI, "%%02X %%s");
     }
     else if (strstr(uPtr->type, "short") == uPtr->type) { /* Umrechnung in Short 2Byte */
         memcpy(&tmpS, recvBuf, 2);
         /* je nach CPU Typ wird hier die Wandlung vorgenommen */
         shortV = __le16_to_cpu(tmpS);
-        floatV = shortV; /* impliziete Typumnwandlung nach float fuer unsere Arithmetic */
+        floatV = shortV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
         sprintf(formatI, "%%04X %%s");
     }
     else if (strstr(uPtr->type, "ushort") == uPtr->type) { /* Umrechnung in Short 2Byte */
         memcpy(&tmpUS, recvBuf, 2);
         /* je nach CPU Typ wird hier die Wandlung vorgenommen */
         ushortV = __le16_to_cpu(tmpUS);
-        floatV = ushortV; /* impliziete Typumnwandlung nach float fuer unsere Arithmetic */
+        floatV = ushortV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
         sprintf(formatI, "%%04X %%s");
     }
     else if (strstr(uPtr->type, "int") == uPtr->type) { /* Umrechnung in Int 4Byte */
         memcpy(&tmpI, recvBuf, 4);
         /* je nach CPU Typ wird hier die Wandlung vorgenommen */
         intV = __le32_to_cpu(tmpI);
-        floatV = intV; /* impliziete Typumnwandlung nach float fuer unsere Arithmetic */
+        floatV = intV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
         sprintf(formatI, "%%08X %%s");
     }
     else if (strstr(uPtr->type, "uint") == uPtr->type) { /* Umrechnung in Unsigned Int 4Byte */
         memcpy(&tmpUI, recvBuf, 4);
         /* je nach CPU Typ wird hier die Wandlung vorgenommen */
         uintV = __le32_to_cpu(tmpUI);
-        floatV = uintV; /* impliziete Typumnwandlung nach float fuer unsere Arithmetic */
+        floatV = uintV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
         sprintf(formatI, "%%08X %%s");
     }
     else if (uPtr->type) {
@@ -396,7 +396,7 @@ int procGetUnit(unitPtr uPtr, char *recvBuf, int recvLen, char *result, char bit
             break;
     }
     if (uPtr->gCalc && *uPtr->gCalc) { /* <calc im XML und get darin definiert */
-        logIT(LOG_INFO, "Typ: %s (in float: %f)", uPtr->type, floatV);
+        logIT(LOG_INFO, "Typ: %s (in double: %f)", uPtr->type, floatV);
         inPtr = uPtr->gCalc;
         logIT(LOG_INFO, "(FLOAT) Exp:%s [%s]", inPtr, buffer);
         erg = execExpression(&inPtr, recvBuf, floatV, errPtr);
@@ -441,11 +441,11 @@ int procSetUnit(unitPtr uPtr, char *sendBuf, short *sendLen, char bitpos, char *
     char input[MAXBUF];
     char *errPtr = error;
     /* 	short t; */
-    float erg = 0.0;
+    double erg = 0.0;
     int ergI = 0;
     short count;
     char ergType;
-    float floatV;
+    double floatV;
     char *inPtr;
     /* hier die Typen fuer die Umrechnung in <type> Tag */
     int8_t charV;

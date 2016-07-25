@@ -51,19 +51,19 @@
 
 int nextToken(char **str, char **c, int *count);
 void  pushBack(char **str, int n);
-float execExpression(char **str, unsigned char *bPtr, float floatV, char *err);
-float execTerm(char **str, unsigned char *bPtr, float floatV, char *err);
-float execFactor(char **str, unsigned  char *bPtr, float floatV, char *err);
+double execExpression(char **str, unsigned char *bPtr, double floatV, char *err);
+double execTerm(char **str, unsigned char *bPtr, double floatV, char *err);
+double execFactor(char **str, unsigned  char *bPtr, double floatV, char *err);
 int execIExpression(char **str, unsigned char *bPtr, char bitpos, char *pPtr, char *err);
 int execITerm(char **str, unsigned char *bPtr, char bitpos, char *pPtr, char *err);
 int execIFactor(char **str, unsigned char *bPtr, char bitpos, char *pPtr, char *err);
 
 
-float execExpression(char **str, unsigned char *bInPtr, float floatV, char *err) {
+double execExpression(char **str, unsigned char *bInPtr, double floatV, char *err) {
     /* printf("execExpression: %s\n",*str); */
-    float f = 1;
-    float term1, term2;
-    //float exp1,exp2;
+    double f = 1;
+    double term1, term2;
+    //double exp1,exp2;
     char *item;
     /*unsigned char bPtr[10];*/
     unsigned char bPtr[10];
@@ -116,9 +116,9 @@ float execExpression(char **str, unsigned char *bInPtr, float floatV, char *err)
 }
 
 
-float execTerm(char **str, unsigned char *bPtr, float floatV, char *err) {
+double execTerm(char **str, unsigned char *bPtr, double floatV, char *err) {
     /* printf("execTerm: %s\n",*str); */
-    float factor1, factor2;
+    double factor1, factor2;
     int op;
     char *item;
     int n;
@@ -152,11 +152,11 @@ float execTerm(char **str, unsigned char *bPtr, float floatV, char *err) {
     }
 }
 
-float execFactor(char **str, unsigned char *bPtr, float floatV, char *err) {
+double execFactor(char **str, unsigned char *bPtr, double floatV, char *err) {
     /* printf("execFactor: %s\n",*str); */
     char nstring[100];
-    float expression;
-    float factor;
+    double expression;
+    double factor;
     char *nPtr;
     char *item;
     int token;
@@ -199,7 +199,7 @@ float execFactor(char **str, unsigned char *bPtr, float floatV, char *err) {
         }
         pushBack(str, n);
         *nPtr = '\0';
-        factor = (float)atof(nstring);
+        factor = (double)atof(nstring);
         /*			printf("  Zahl: %s (f:%f)\n",nstring,factor); */
         return(factor);
     case KAUF:

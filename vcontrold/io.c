@@ -137,7 +137,7 @@ int receive(int fd, char *r_buf, int r_len, unsigned long *etime) {
 
     struct tms tms_t;
     clock_t start, end, mid, mid1;
-    float clktck = (float)sysconf(_SC_CLK_TCK);
+    double clktck = (double)sysconf(_SC_CLK_TCK);
     start = times(&tms_t);
     mid1 = start;
     for (i = 0; i < r_len; i++) {
@@ -157,11 +157,11 @@ int receive(int fd, char *r_buf, int r_len, unsigned long *etime) {
         alarm(0);
         unsigned char byte = r_buf[i] & 255;
         mid = times(&tms_t);
-        logIT(LOG_INFO, "<RECV: %02X (%0.1f ms)", byte, ((float)(mid - mid1) / clktck) * 1000);
+        logIT(LOG_INFO, "<RECV: %02X (%0.1f ms)", byte, ((double)(mid - mid1) / clktck) * 1000);
         mid1 = mid;
     }
     end = times(&tms_t);
-    *etime = (unsigned long)((float)(end - start) / clktck) * 1000;
+    *etime = (unsigned long)((double)(end - start) / clktck) * 1000;
     return i;
 }
 
@@ -216,7 +216,7 @@ size_t receive_nb(int fd, char *r_buf, size_t r_len, unsigned long *etime) {
 
     struct tms tms_t;
     clock_t start, end, mid, mid1;
-    float clktck = (float)sysconf(_SC_CLK_TCK);
+    double clktck = (double)sysconf(_SC_CLK_TCK);
     start = times(&tms_t);
     mid1 = start;
 
@@ -269,7 +269,7 @@ size_t receive_nb(int fd, char *r_buf, size_t r_len, unsigned long *etime) {
             else {
                 unsigned char byte = r_buf[i] & 255;
                 mid = times(&tms_t);
-                logIT(LOG_INFO, "<RECV: len=%zd %02X (%0.1f ms)", len, byte, ((float)(mid - mid1) / clktck) * 1000);
+                logIT(LOG_INFO, "<RECV: len=%zd %02X (%0.1f ms)", len, byte, ((double)(mid - mid1) / clktck) * 1000);
                 mid1 = mid;
                 i += (size_t)len;
             }
@@ -279,7 +279,7 @@ size_t receive_nb(int fd, char *r_buf, size_t r_len, unsigned long *etime) {
         }
     }
     end = times(&tms_t);
-    *etime = (unsigned long)((float)(end - start) / clktck) * 1000;
+    *etime = (unsigned long)((double)(end - start) / clktck) * 1000;
     setblock(fd);
     logIT(LOG_INFO, dump(string, "<RECV: received", r_buf, i));
     return i;
