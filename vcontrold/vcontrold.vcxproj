@@ -64,6 +64,9 @@
     <IncludePath>/usr/include/libxml2;H:\linuxincludes;H:\linuxincludes\libxml2;H:\linuxincludes\arm-linux-gnueabihf;$(IncludePath)</IncludePath>
     <TargetExt />
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+    <IncludePath>/usr/include/libxml2;H:\linuxincludes;H:\linuxincludes\libxml2;H:\linuxincludes\arm-linux-gnueabihf;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="arithmetic.c" />
     <ClCompile Include="common.c" />
@@ -96,6 +99,17 @@
     <Link>
       <LibraryDependencies>xml2;pthread</LibraryDependencies>
     </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+    <Link>
+      <LibraryDependencies>xml2;pthread</LibraryDependencies>
+    </Link>
+    <ClCompile>
+      <CLanguageStandard>Default</CLanguageStandard>
+    </ClCompile>
+    <ClCompile>
+      <CppLanguageStandard>Default</CppLanguageStandard>
+    </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

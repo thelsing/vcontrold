@@ -115,11 +115,12 @@ int parseLine(char *line, char *hex, int *hexlen, char *uSPtr, ssize_t uSPtrLen)
     return(token);
 }
 
-int execByteCode(compilePtr cmpPtr, int fd, char *recvBuf, size_t recvLen,
+int execByteCode(commandPtr cmdPtr, int fd, char *recvBuf, size_t recvLen,
     char *sendBuf, size_t sendLen, short supressUnit,
     char bitpos, int retry,
     char *pRecvPtr, unsigned short recvTimeout) {
-
+    
+    compilePtr cmpPtr = cmdPtr->cmpPtr;
     char string[256];
     char result[MAXBUF];
     char simIn[500];
@@ -237,7 +238,7 @@ int execByteCode(compilePtr cmpPtr, int fd, char *recvBuf, size_t recvLen,
                  * empfangenen Wert um, und geben den umgerechneten Wert auch in uPtr zurueck */
                 bzero(result, sizeof(result));
                 if (!supressUnit && cmpPtr->uPtr) {
-                    if (procGetUnit(cmpPtr->uPtr, recvBuf, cmpPtr->len, result, bitpos, pRecvPtr) <= 0) {
+                    if (procGetUnit(cmpPtr->uPtr, recvBuf + cmdPtr->byteOffset, cmpPtr->len - cmdPtr->byteOffset, result, bitpos, pRecvPtr) <= 0) {
                         logIT(LOG_ERR, "Fehler Unit Wandlung:%s", result);
                         return(-1);
                     }

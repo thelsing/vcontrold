@@ -421,7 +421,7 @@ int interactive(int socketfd, char *device) {
             if (cPtr->precmd && (pcPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cPtr->precmd))) {
                 logIT(LOG_INFO, "Fuehre Pre Kommando %s aus", cPtr->precmd);
 
-                if (execByteCode(pcPtr->cmpPtr, fd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1, pcPtr->bit, pcPtr->retry, pRecvBuf, pcPtr->recvTimeout) == -1) {
+                if (execByteCode(pcPtr, fd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1, pcPtr->bit, pcPtr->retry, pRecvBuf, pcPtr->recvTimeout) == -1) {
                     logIT(LOG_ERR, "Fehler beim ausfuehren von %s", readBuf);
                     sendErrMsg(socketfd);
                     pthread_mutex_unlock(&device_mutex);
@@ -442,7 +442,7 @@ int interactive(int socketfd, char *device) {
                 0 -> Formaterierter String
                 n -> Bytes in Rohform */
 
-            count = execByteCode(cPtr->cmpPtr, fd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit, cPtr->bit, cPtr->retry, pRecvBuf, cPtr->recvTimeout);
+            count = execByteCode(cPtr, fd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit, cPtr->bit, cPtr->retry, pRecvBuf, cPtr->recvTimeout);
 
             if (count == -1) {
                 logIT(LOG_ERR, "Fehler beim ausfuehren von %s", readBuf);
@@ -607,6 +607,7 @@ void* connection_handler(void* voidArgs)
     thread_args* args = (thread_args*)voidArgs;
     interactive(args->sock_fd, args->device);
     closeSocket(args->sock_fd);
+    free(args);
     return 0;
 }
 
@@ -820,7 +821,7 @@ int main(int argc, char* argv[]) {
                 logIT(LOG_ERR, "chdir / fehlgeschlagen");
                 exit(1);
             }
-            pidFD = open(pidFile, O_RDWR | O_CREAT, 0600);
+            pidFD = open(pidFile, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
             if (pidFD == -1) {
                 logIT(LOG_ERR, "Could not open PID lock file %s, exiting", pidFile);
                 exit(1);
@@ -831,8 +832,16 @@ int main(int argc, char* argv[]) {
                 exit(1);
             }
 
+            if (ftruncate(pidFD, 0) == -1) {
+                logIT("Could not truncate PID file '%s'", pidFile);
+                exit(1);
+            }
+
             sprintf(str, "%d\n", getpid());
-            write(pidFD, str, strlen(str));
+            if (write(pidFD, str, strlen(str)) != strlen(str)) {
+                logIT("Writing to PID file '%s'", pidFile);
+                exit(1);
+            }
         }
 
         int sockfd = -1;
@@ -853,11 +862,11 @@ int main(int argc, char* argv[]) {
                 /* Socket hat fd zurueckgegeben, den Rest machen wir in interactive */
                 pthread_t thread_id;
 
-                thread_args args;
-                strncpy(args.device, device, 20);
-                args.sock_fd = sockfd;
+                thread_args* args = malloc(sizeof(thread_args));
+                strncpy(args->device, device, 20);
+                args->sock_fd = sockfd;
 
-                if (pthread_create(&thread_id, NULL, connection_handler, (void*)&args) < 0)
+                if (pthread_create(&thread_id, NULL, connection_handler, (void*)args) < 0)
                 {
                     logIT(LOG_ERR, "Could not create thread.");
                     exit(1);

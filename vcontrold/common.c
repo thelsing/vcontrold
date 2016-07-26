@@ -143,8 +143,8 @@ char hex2chr(char *hex) {
     return (char)hex_value;
 }
 
-int char2hex(char *outString, const char *charPtr, int len) {
-    int n;
+size_t char2hex(char *outString, const char *charPtr, size_t len) {
+    size_t n;
     char string[MAXBUF];
     bzero(string, sizeof(string));
     for (n = 0; n < len; n++) {
@@ -154,10 +154,10 @@ int char2hex(char *outString, const char *charPtr, int len) {
     }
     /* letztes Leerzeichen verdampfen */
     outString[strlen(outString) - 1] = '\0';
-    return(len);
+    return len;
 }
 
-size_t string2chr(char *line, char *buf, short bufsize) {
+size_t string2chr(char *line, char *buf, size_t bufsize) {
     char *sptr;
     size_t count;
 

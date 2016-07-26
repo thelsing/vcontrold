@@ -8,8 +8,8 @@
 int initLog(int useSyslog, char *logfile, int debugSwitch);
 void logIT(int class, char *string, ...);
 char hex2chr(char *hex);
-int char2hex(char *outString, const char *charPtr, int len);
-size_t string2chr(char *line, char *buf, short bufsize);
+size_t char2hex(char *outString, const char *charPtr, size_t len);
+size_t string2chr(char *line, char *buf, size_t bufsize);
 void sendErrMsg(int fd);
 void setDebugFD(int fd);
 ssize_t readn(int fd, void *vptr, size_t n);

@@ -51,24 +51,15 @@
 
 #endif
 
-/* Deklarationen */
-int getCycleTime(char *recv, int len, char *result);
-int setCycleTime(char *string, char *sendBuf);
-short bytes2Enum(enumPtr ptr, char *bytes, char **text, short len);
-short text2Enum(enumPtr ptr, char *text, char **bytes, short *len);
-int getErrState(enumPtr ePtr, char *recv, int len, char *result);
-int getSysTime(char *recv, int len, char *result);
-int setSysTime(char *input, char *sendBuf, short bufsize);
+int getCycleTime(char *recv, size_t len, char *result) {
 
-int getCycleTime(char *recv, int len, char *result) {
-
-    int i;
+    size_t i;
     char string[80];
 
     /* if ((len/2)*2 !=len) { */
     if (len % 2) {
         sprintf(result, "Anzahl Bytes ungerade");
-        return(0);
+        return 0;
     }
 
     bzero(string, sizeof(string));
@@ -83,7 +74,7 @@ int getCycleTime(char *recv, int len, char *result) {
         strcat(result, string);
     }
     result[strlen(result) - 1] = '\0'; /* \n verdampfen */
-    return(1);
+    return 1;
 }
 
 int setCycleTime(char *input, char *sendBuf) {
@@ -119,7 +110,7 @@ int setCycleTime(char *input, char *sendBuf) {
                 return(0);
             }
             sscanf(sptr, "%i:%i", &hour, &min);
-            *bptr = ((hour << 3) + (min / 10)) & 0xff;
+            *bptr = (char)((hour << 3) + (min / 10)) & 0xff;
             logIT(LOG_INFO, "Cycle Time: %02d:%02d -> [%02X]", hour, min, (unsigned char)*bptr);
         }
         bptr++;
@@ -168,7 +159,7 @@ int getSysTime(char *recv, int len, char *result) {
     return(1);
 }
 
-int setSysTime(char *input, char *sendBuf, short bufsize) {
+size_t setSysTime(char *input, char *sendBuf, size_t bufsize) {
     char systime[80];
     time_t tt;
     struct tm *t;
@@ -192,10 +183,29 @@ int setSysTime(char *input, char *sendBuf, short bufsize) {
     }
 }
 
+short bytes2Enum(enumPtr ptr, char *bytes, char **text, size_t len) {
+    enumPtr ePtr = NULL;
+    char string[200];
+    if (!len)
+        return 0;
+    /* suche die passende Enum und gebe den Wert zurueck */
+    if (!(ePtr = getEnumNode(ptr, bytes, len))) /* wir suchen nach dem Default */
+        ePtr = getDefaultEnumNode(ptr, bytes);
+    if (ePtr) {
+        *text = ePtr->text;
+        bzero(string, sizeof(string));
+        char2hex(string, bytes, len);
+        strcat(string, " -> ");
+        strcat(string, ePtr->text);
+        logIT(LOG_INFO, "%s", string);
+        return 1;
+    }
+    else
+        return 0;
+}
 
 
-
-int getErrState(enumPtr ePtr, char *recv, int len, char *result) {
+int getErrState(enumPtr ePtr, char *recv, size_t len, char *result) {
     int i;
     char *errtext;
     char systime[35];
@@ -229,28 +239,9 @@ int getErrState(enumPtr ePtr, char *recv, int len, char *result) {
 }
 
 
-short bytes2Enum(enumPtr ptr, char *bytes, char **text, short len) {
-    enumPtr ePtr = NULL;
-    char string[200];
-    if (!len)
-        return(0);
-    /* suche die passende Enum und gebe den Wert zurueck */
-    if (!(ePtr = getEnumNode(ptr, bytes, len))) /* wir suchen nach dem Default */
-        ePtr = getEnumNode(ptr, bytes, -1);
-    if (ePtr) {
-        *text = ePtr->text;
-        bzero(string, sizeof(string));
-        char2hex(string, bytes, len);
-        strcat(string, " -> ");
-        strcat(string, ePtr->text);
-        logIT(LOG_INFO, "%s", string);
-        return(1);
-    }
-    else
-        return(0);
-}
 
-short text2Enum(enumPtr ptr, char *text, char **bytes, short *len) {
+
+size_t text2Enum(enumPtr ptr, char *text, char **bytes, size_t *len) {
     enumPtr ePtr = NULL;
     char string[200];
     char string2[1000];
@@ -270,7 +261,7 @@ short text2Enum(enumPtr ptr, char *text, char **bytes, short *len) {
 }
 
 
-int procGetUnit(unitPtr uPtr, char *recvBuf, int recvLen, char *result, char bitpos, char *pRecvPtr) {
+int procGetUnit(unitPtr uPtr, char *recvBuf, size_t recvLen, char *result, char bitpos, char *pRecvPtr) {
     char string[256];
     char error[1000];
     char buffer[MAXBUF];
@@ -350,7 +341,7 @@ int procGetUnit(unitPtr uPtr, char *recvBuf, int recvLen, char *result, char bit
     else if (strstr(uPtr->type, "short") == uPtr->type) { /* Umrechnung in Short 2Byte */
         memcpy(&tmpS, recvBuf, 2);
         /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-        shortV = __le16_to_cpu(tmpS);
+        shortV = (int16_t) __le16_to_cpu(tmpS);
         floatV = shortV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
         sprintf(formatI, "%%04X %%s");
     }
@@ -364,7 +355,7 @@ int procGetUnit(unitPtr uPtr, char *recvBuf, int recvLen, char *result, char bit
     else if (strstr(uPtr->type, "int") == uPtr->type) { /* Umrechnung in Int 4Byte */
         memcpy(&tmpI, recvBuf, 4);
         /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-        intV = __le32_to_cpu(tmpI);
+        intV = (int32_t)__le32_to_cpu(tmpI);
         floatV = intV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
         sprintf(formatI, "%%08X %%s");
     }
@@ -434,7 +425,7 @@ int procGetUnit(unitPtr uPtr, char *recvBuf, int recvLen, char *result, char bit
 }
 
 
-int procSetUnit(unitPtr uPtr, char *sendBuf, short *sendLen, char bitpos, char *pRecvPtr) {
+int procSetUnit(unitPtr uPtr, char *sendBuf, size_t *sendLen, char bitpos, char *pRecvPtr) {
     char string[256];
     char error[1000];
     char buffer[MAXBUF];

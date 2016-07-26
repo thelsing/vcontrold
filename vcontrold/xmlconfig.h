@@ -22,6 +22,7 @@ unitPtr getUnitNode(unitPtr ptr, const char *name);
 commandPtr getCommandNode(commandPtr ptr, const char *name);
 allowPtr getAllowNode(allowPtr ptr, in_addr_t testIP);
 enumPtr getEnumNode(enumPtr prt, char *search, size_t len);
+enumPtr getDefaultEnumNode(enumPtr ptr, char *search);
 icmdPtr getIcmdNode(icmdPtr ptr, const char *name);
 
 
@@ -98,6 +99,7 @@ struct command {
     char *errStr;
     char *precmd;
     unsigned char len;
+    size_t byteOffset;
     int retry;
     unsigned short recvTimeout;
     char bit;
@@ -117,7 +119,7 @@ struct icmd {
 
 struct enumerate {
     char *bytes;
-    int len;
+    size_t len;
     char *text;
     enumPtr next;
 } Enumerate;

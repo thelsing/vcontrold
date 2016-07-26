@@ -173,6 +173,7 @@ commandPtr newCommandNode(commandPtr ptr) {
     nptr->next = NULL;
     nptr->cmpPtr = NULL;
     nptr->bit = 0;
+    nptr->byteOffset = 0;
     return nptr;
 }
 
@@ -351,14 +352,21 @@ enumPtr getEnumNode(enumPtr ptr, char *search, size_t len) {
     /* len angegeben, wir suchen nach Bytes */
     if ((len > 0) && ptr->bytes && (memcmp(ptr->bytes, search, len) == 0))
         return(ptr);
-    /* len==0 -> Stringvergelich */
+    /* len == 0 -> Stringvergelich */
     else if (!len && ptr->text && (strcmp(ptr->text, search) == 0))
-        return(ptr);
-    /* len == -1 -> default Wert */
-    else if ((len < 0) && (ptr->bytes == NULL))
         return(ptr);
     else
         return(getEnumNode(ptr->next, search, len));
+}
+
+enumPtr getDefaultEnumNode(enumPtr ptr, char *search) {
+    if (!ptr)
+        return NULL;
+    /*  default Wert */
+    else if (ptr->bytes == NULL)
+        return ptr;
+    else
+        return getDefaultEnumNode(ptr->next, search);
 }
 
 void removeEnumList(enumPtr ptr) {
@@ -885,6 +893,22 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr) {
             else
                 cur = NULL;
         }
+        else if (commandFound && strstr((char *)cur->name, "byteoffset")) {
+            chrPtr = getTextNode(cur);
+            logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
+            if (chrPtr) {
+                cPtr->byteOffset = atoi(chrPtr);
+            }
+            else
+                cPtr->byteOffset = 0;
+            if (cur->next &&
+                (!(cur->next->type == XML_TEXT_NODE) || cur->next->next))
+                cur = cur->next;
+            else if (prevPtr)
+                cur = prevPtr->next;
+            else
+                cur = NULL;
+        }
         else if (commandFound && strstr((char *)cur->name, "error")) {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -1275,32 +1299,33 @@ int parseXMLFile(char *filename) {
             continue;
         }
         if (strstr((char *)cur->name, "extern")) {
+			prevPtr = cur;
             cur = cur->children;
             if (cur && strstr((char *)cur->name, "vito")) {
                 prevPtr = cur;
                 cur = cur->children; /* der xinclude Kram steht unter <extern><vito> */
                 continue;
             }
+			else if (strstr((char *)cur->name, "protocols")) {
+				if (protocolsFound) { /* hier duerfen wir nie hinkommen, 2. Durchlauf */
+					logIT(LOG_ERR, "Fehler in der XML Konfig");
+					return(0);
+				}
+				protocolsFound = 1;
+				if (!(TprotoPtr = parseProtocol(cur->children)))
+					return(0);
+				cur = prevPtr->next;
+				continue;
+			}
+			else if (strstr((char *)cur->name, "units")) {
+				if (!(TuPtr = parseUnit(cur->children)))
+					return(0);
+				cur = prevPtr->next;
+				continue;
+			}
             else {
                 cur = prevPtr->next;
             }
-        }
-        else if (strstr((char *)cur->name, "protocols")) {
-            if (protocolsFound) { /* hier duerfen wir nie hinkommen, 2. Durchlauf */
-                logIT(LOG_ERR, "Fehler in der XML Konfig");
-                return(0);
-            }
-            protocolsFound = 1;
-            if (!(TprotoPtr = parseProtocol(cur->children)))
-                return(0);
-            cur = cur->next; /* gleiche Ebene wie unix, also next */
-            continue;
-        }
-        else if (strstr((char *)cur->name, "units")) {
-            if (!(TuPtr = parseUnit(cur->children)))
-                return(0);
-            cur = cur->next; /* gleiche Ebene wie unix, also next */
-            continue;
         }
         else if (strstr((char *)cur->name, "commands")) {
             if (!(TcmdPtr = parseCommand(cur->children, NULL, TdevPtr)))
@@ -1345,6 +1370,7 @@ int parseXMLFile(char *filename) {
                 ncPtr->precmd = cPtr->precmd;
                 ncPtr->description = cPtr->description;
                 ncPtr->len = cPtr->len;
+                ncPtr->byteOffset = cPtr->byteOffset;
             }
             dPtr = dPtr->next;
         }
