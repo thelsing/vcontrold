@@ -173,7 +173,7 @@ commandPtr newCommandNode(commandPtr ptr) {
     nptr->next = NULL;
     nptr->cmpPtr = NULL;
     nptr->bit = 0;
-    nptr->byteOffset = 0;
+    nptr->bytePosition = 0;
     return nptr;
 }
 
@@ -893,14 +893,14 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr) {
             else
                 cur = NULL;
         }
-        else if (commandFound && strstr((char *)cur->name, "byteoffset")) {
+        else if (commandFound && strstr((char *)cur->name, "bytePosition")) {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
             if (chrPtr) {
-                cPtr->byteOffset = atoi(chrPtr);
+                cPtr->bytePosition = atoi(chrPtr);
             }
             else
-                cPtr->byteOffset = 0;
+                cPtr->bytePosition = 0;
             if (cur->next &&
                 (!(cur->next->type == XML_TEXT_NODE) || cur->next->next))
                 cur = cur->next;
@@ -909,6 +909,54 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr) {
             else
                 cur = NULL;
         }
+		else if (commandFound && strstr((char *)cur->name, "byteLength")) {
+			chrPtr = getTextNode(cur);
+			logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
+			if (chrPtr) {
+				cPtr->byteLength = atoi(chrPtr);
+			}
+			else
+				cPtr->byteLength = 0;
+			if (cur->next &&
+				(!(cur->next->type == XML_TEXT_NODE) || cur->next->next))
+				cur = cur->next;
+			else if (prevPtr)
+				cur = prevPtr->next;
+			else
+				cur = NULL;
+		}
+		else if (commandFound && strstr((char *)cur->name, "bitPosition")) {
+			chrPtr = getTextNode(cur);
+			logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
+			if (chrPtr) {
+				cPtr->bitPosition = atoi(chrPtr);
+			}
+			else
+				cPtr->bitPosition = 0;
+			if (cur->next &&
+				(!(cur->next->type == XML_TEXT_NODE) || cur->next->next))
+				cur = cur->next;
+			else if (prevPtr)
+				cur = prevPtr->next;
+			else
+				cur = NULL;
+		}
+		else if (commandFound && strstr((char *)cur->name, "bitLength")) {
+			chrPtr = getTextNode(cur);
+			logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
+			if (chrPtr) {
+				cPtr->bitLength = atoi(chrPtr);
+			}
+			else
+				cPtr->bitLength = 0;
+			if (cur->next &&
+				(!(cur->next->type == XML_TEXT_NODE) || cur->next->next))
+				cur = cur->next;
+			else if (prevPtr)
+				cur = prevPtr->next;
+			else
+				cur = NULL;
+		}
         else if (commandFound && strstr((char *)cur->name, "error")) {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -980,11 +1028,28 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr) {
             else
                 cur = NULL;
         }
-        else if (commandFound && strstr((char *)cur->name, "len")) {
+		else if (commandFound && strstr((char *)cur->name, "shortDescription")) {
+			chrPtr = getTextNode(cur);
+			logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
+			if (chrPtr) {
+				cPtr->shortDescription = calloc(strlen(chrPtr) + 1, sizeof(char));
+				strcpy(cPtr->shortDescription, chrPtr);
+			}
+			else
+				nullIT(&cPtr->shortDescription);
+			if (cur->next &&
+				(!(cur->next->type == XML_TEXT_NODE) || cur->next->next))
+				cur = cur->next;
+			else if (prevPtr)
+				cur = prevPtr->next;
+			else
+				cur = NULL;
+		}
+        else if (commandFound && strstr((char *)cur->name, "blockLength")) {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
             if (chrPtr) {
-                cPtr->len = atoi(chrPtr);
+                cPtr->blockLength = atoi(chrPtr);
             }
             if (cur->next &&
                 (!(cur->next->type == XML_TEXT_NODE) || cur->next->next))
@@ -1353,6 +1418,26 @@ int parseXMLFile(char *filename) {
        und ergaenzen dort die einzelnen Befehle */
     cPtr = TcmdPtr;
     while (cPtr) {
+		/*sanitize command*/
+		if (!cPtr->byteLength)
+			cPtr->byteLength = cPtr->blockLength;
+
+		if (cPtr->bitPosition || cPtr->bitLength)
+		{
+			size_t additionalOffset = cPtr->bitPosition / 8;
+			cPtr->bitPosition %= 8;
+			cPtr->bytePosition += additionalOffset;
+
+			if (!cPtr->bitLength)
+				cPtr->bitLength = 1;
+			if (cPtr->bitPosition + cPtr->bitLength > 8)
+				cPtr->bitLength = 8 - cPtr->bitPosition;
+
+			cPtr->byteLength = 1;
+		}
+		
+		cPtr->blockLength = cPtr->bytePosition + cPtr->byteLength;
+
         dPtr = TdevPtr;
         while (dPtr) {
             if (!getCommandNode(dPtr->cmdPtr, cPtr->name)) {
@@ -1369,8 +1454,12 @@ int parseXMLFile(char *filename) {
                 ncPtr->errStr = cPtr->errStr;
                 ncPtr->precmd = cPtr->precmd;
                 ncPtr->description = cPtr->description;
-                ncPtr->len = cPtr->len;
-                ncPtr->byteOffset = cPtr->byteOffset;
+                ncPtr->blockLength = cPtr->blockLength;
+                ncPtr->bytePosition = cPtr->bytePosition;
+				ncPtr->byteLength = cPtr->byteLength;
+				ncPtr->shortDescription = cPtr->shortDescription;
+				ncPtr->bitPosition = cPtr->bitPosition;
+				ncPtr->bitLength = cPtr->bitLength;
             }
             dPtr = dPtr->next;
         }

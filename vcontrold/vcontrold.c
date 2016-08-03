@@ -245,7 +245,7 @@ int interactive(int socketfd, char *device) {
     char string[256];
     commandPtr cPtr;
     commandPtr pcPtr;
-    int fd = -1;
+    static int deviceFd = -1;
     int count = 0;
     ssize_t rcount = 0;
     short noUnit = 0;
@@ -288,7 +288,7 @@ int interactive(int socketfd, char *device) {
         }
         else if (strstr(readBuf, "quit") == readBuf) {
             Writen(socketfd, bye, strlen(bye));
-            framer_closeDevice(fd);
+            //framer_closeDevice(deviceFd);
             return 1;
         }
         else if (strstr(readBuf, "debug on") == readBuf) {
@@ -319,12 +319,12 @@ int interactive(int socketfd, char *device) {
         else if (strstr(readBuf, "raw") == readBuf) {
             rawModus(socketfd, device);
         }
-        else if (strstr(readBuf, "close") == readBuf) {
-            framer_closeDevice(fd);
-            snprintf(string, sizeof(string), "%s geschlossen\n", device);
-            Writen(socketfd, string, strlen(string));
-            fd = -1;
-        }
+        //else if (strstr(readBuf, "close") == readBuf) {
+        //    framer_closeDevice(deviceFd);
+        //    snprintf(string, sizeof(string), "%s geschlossen\n", device);
+        //    Writen(socketfd, string, strlen(string));
+        //    deviceFd = -1;
+        //}
 
         else if (strstr(readBuf, "commands") == readBuf) {
             pthread_mutex_lock(&config_mutex);
@@ -373,15 +373,15 @@ int interactive(int socketfd, char *device) {
                     sendErrMsg(socketfd);
                     if (!Writen(socketfd, prompt, strlen(prompt))) {
                         sendErrMsg(socketfd);
-                        framer_closeDevice(fd);
+                        //framer_closeDevice(deviceFd);
                         return(0);
                     }
                     continue;
                 }
                 /* falls sendLen > als len der Befehls, nehmen wir len */
-                if (sendLen > cPtr->len) {
-                    logIT(LOG_WARNING, "Laenge des Hex Strings > Sendelaenge des Befehls, sende nur %d Byte", cPtr->len);
-                    sendLen = cPtr->len;
+                if (sendLen > cPtr->blockLength) {
+                    logIT(LOG_WARNING, "Laenge des Hex Strings > Sendelaenge des Befehls, sende nur %d Byte", cPtr->blockLength);
+                    sendLen = cPtr->blockLength;
                 }
             }
             else if (*para) { /* wir kopieren die Parameter, darum kuemert sich execbyteCode selbst */
@@ -395,19 +395,19 @@ int interactive(int socketfd, char *device) {
             /* das Device wird erst geoeffnet, wenn wir was zu tun haben */
             /* aber nur, falls es nicht schon offen ist */
 
-            if (fd < 0) {
+            if (deviceFd < 0) {
                 /* As one vclient call opens the link once, all is seen a transaction
                  * This may cause trouble for telnet sessions, as the whole session is
                  * one link activity, even more commands are given within.
                  * This is related to a accept/close on a server socket
                  */
 
-                if ((fd = framer_openDevice(device, cfgPtr->devPtr->protoPtr->id)) == -1) {
+                if ((deviceFd = framer_openDevice(device, cfgPtr->devPtr->protoPtr->id)) == -1) {
                     logIT(LOG_ERR, "Fehler beim oeffnen %s", device);
                     sendErrMsg(socketfd);
                     if (!Writen(socketfd, prompt, strlen(prompt))) {
                         sendErrMsg(socketfd);
-                        framer_closeDevice(fd);
+                        framer_closeDevice(deviceFd);
                         return (0);
                     }
                     continue;
@@ -421,7 +421,7 @@ int interactive(int socketfd, char *device) {
             if (cPtr->precmd && (pcPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cPtr->precmd))) {
                 logIT(LOG_INFO, "Fuehre Pre Kommando %s aus", cPtr->precmd);
 
-                if (execByteCode(pcPtr, fd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1, pcPtr->bit, pcPtr->retry, pRecvBuf, pcPtr->recvTimeout) == -1) {
+                if (execByteCode(pcPtr, deviceFd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1, pcPtr->bit, pcPtr->retry, pRecvBuf, pcPtr->recvTimeout) == -1) {
                     logIT(LOG_ERR, "Fehler beim ausfuehren von %s", readBuf);
                     sendErrMsg(socketfd);
                     pthread_mutex_unlock(&device_mutex);
@@ -430,7 +430,7 @@ int interactive(int socketfd, char *device) {
                 }
                 else {
                     bzero(buffer, sizeof(buffer));
-                    char2hex(buffer, pRecvBuf, pcPtr->len);
+                    char2hex(buffer, pRecvBuf, pcPtr->blockLength);
                     logIT(LOG_INFO, "Ergebnis Pre-Kommand: %s", buffer);
                 }
 
@@ -442,7 +442,7 @@ int interactive(int socketfd, char *device) {
                 0 -> Formaterierter String
                 n -> Bytes in Rohform */
 
-            count = execByteCode(cPtr, fd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit, cPtr->bit, cPtr->retry, pRecvBuf, cPtr->recvTimeout);
+            count = execByteCode(cPtr, deviceFd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit, cPtr->bit, cPtr->retry, pRecvBuf, cPtr->recvTimeout);
 
             if (count == -1) {
                 logIT(LOG_ERR, "Fehler beim ausfuehren von %s", readBuf);
@@ -493,7 +493,7 @@ int interactive(int socketfd, char *device) {
                 /* Error String definiert */
                 char buf[MAXBUF];
                 bzero(buf, sizeof(buf));
-                if (cPtr->errStr && char2hex(buf, cPtr->errStr, cPtr->len)) {
+                if (cPtr->errStr && char2hex(buf, cPtr->errStr, cPtr->blockLength)) {
                     snprintf(string, sizeof(string), "\tError bei (Hex): %s", buf);
                     Writen(socketfd, string, strlen(string));
                 }
@@ -573,7 +573,7 @@ int interactive(int socketfd, char *device) {
         else if (*readBuf) {
             if (!Writen(socketfd, UNKNOWN, strlen(UNKNOWN))) {
                 sendErrMsg(socketfd);
-                framer_closeDevice(fd);
+                //framer_closeDevice(deviceFd);
                 return(0);
             }
 
@@ -582,13 +582,13 @@ int interactive(int socketfd, char *device) {
         sendErrMsg(socketfd);
         if (!Writen(socketfd, prompt, strlen(prompt))) {
             sendErrMsg(socketfd);
-            framer_closeDevice(fd);
+            //framer_closeDevice(deviceFd);
             return 0;
         }
         bzero(readBuf, sizeof(readBuf));
     }
     sendErrMsg(socketfd);
-    framer_closeDevice(fd);
+    //framer_closeDevice(deviceFd);
     return 0;
 }
 
@@ -605,6 +605,7 @@ static void sigTermHandler(int signo) {
 void* connection_handler(void* voidArgs)
 {
     thread_args* args = (thread_args*)voidArgs;
+	logIT(LOG_DEBUG, "ch: device: %s", args->device);
     interactive(args->sock_fd, args->device);
     closeSocket(args->sock_fd);
     free(args);
@@ -617,7 +618,7 @@ void* connection_handler(void* voidArgs)
 int main(int argc, char* argv[]) {
 
     /* Auswertung der Kommandozeilenschalter */
-    char *device = NULL;
+    char device[20] = "";
     char *cmdfile = NULL;
     char *logfile = NULL;
     static int useSyslog = 0;
@@ -684,7 +685,7 @@ int main(int argc, char* argv[]) {
             break;
 
         case 'd':
-            device = optarg;
+            strncpy(device, optarg, 20);
             break;
 
         case 'g':
@@ -739,11 +740,11 @@ int main(int argc, char* argv[]) {
 
 
     /* es wurden die beiden globalen Variablen cfgPtr und protoPtr gefuellt */
-    if (cfgPtr) {
-        if (!tcpport)
-            tcpport = cfgPtr->port;
-        if (!device)
-            device = cfgPtr->tty;
+	if (cfgPtr) {
+		if (!tcpport)
+			tcpport = cfgPtr->port;
+		if (!device[0])
+			strncpy(device, cfgPtr->tty, 20);
         if (!logfile)
             logfile = cfgPtr->logfile;
         if (!useSyslog)
@@ -863,6 +864,7 @@ int main(int argc, char* argv[]) {
                 pthread_t thread_id;
 
                 thread_args* args = malloc(sizeof(thread_args));
+				logIT(LOG_DEBUG, "main: device: %s", device);
                 strncpy(args->device, device, 20);
                 args->sock_fd = sockfd;
 

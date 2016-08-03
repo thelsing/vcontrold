@@ -1,6 +1,7 @@
 /* socket.c */
 /* $Id: socket.c 13 2008-03-02 13:13:41Z marcust $ */
 
+#define _GNU_SOURCE
 #include <sys/time.h>
 #include <time.h>
 #include <errno.h>
@@ -118,7 +119,6 @@ int openSocket(int tcpport) {
 
 int listenToSocket(int listenfd, short(*checkP)(char *)) {
     int connfd;
-    pid_t	childpid;
     struct sockaddr_storage cliaddr;
     socklen_t               cliaddrlen = sizeof(cliaddr);
     char clienthost[NI_MAXHOST];
@@ -211,7 +211,7 @@ int openCliSocket(char *host, int port, int noTCPdelay) {
 ssize_t						/* Write "n" bytes to a descriptor. */
 writen(int fd, const void *vptr, size_t n)
 {
-    size_t		nleft;
+    ssize_t		nleft;
     ssize_t		nwritten;
     const char	*ptr;
 
@@ -228,7 +228,7 @@ writen(int fd, const void *vptr, size_t n)
         nleft -= nwritten;
         ptr += nwritten;
     }
-    return(n);
+    return (ssize_t)n;
 }
 /* end writen */
 
@@ -239,7 +239,7 @@ Writen(int fd, void *ptr, size_t nbytes)
         logIT(LOG_ERR, "Fehler beim schreiben auf socket");
         return(0);
     }
-    return(nbytes);
+    return (ssize_t)nbytes;
 }
 
 
@@ -248,7 +248,7 @@ Writen(int fd, void *ptr, size_t nbytes)
 ssize_t						/* Read "n" bytes from a descriptor. */
 readn(int fd, void *vptr, size_t n)
 {
-    size_t	nleft;
+    ssize_t	nleft;
     ssize_t	nread;
     char	*ptr;
 
@@ -274,7 +274,7 @@ readn(int fd, void *vptr, size_t n)
 #endif
         ptr += nread;
     }
-    return(n - nleft);		/* return >= 0 */
+    return ((ssize_t)n) - nleft;		/* return >= 0 */
 }
 /* end readn */
 

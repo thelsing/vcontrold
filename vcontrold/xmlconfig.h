@@ -92,14 +92,18 @@ struct macro {
 
 struct command {
     char *name;
+	char *shortDescription;
     char *pcmd;
     char *send;
     char *addr;
     char *unit;
     char *errStr;
     char *precmd;
-    unsigned char len;
-    size_t byteOffset;
+    size_t blockLength;
+    size_t bytePosition;
+	size_t byteLength;
+	size_t bitPosition;
+	size_t bitLength;
     int retry;
     unsigned short recvTimeout;
     char bit;

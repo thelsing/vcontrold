@@ -238,10 +238,27 @@ int execByteCode(commandPtr cmdPtr, int fd, char *recvBuf, size_t recvLen,
                  * empfangenen Wert um, und geben den umgerechneten Wert auch in uPtr zurueck */
                 bzero(result, sizeof(result));
                 if (!supressUnit && cmpPtr->uPtr) {
-                    if (procGetUnit(cmpPtr->uPtr, recvBuf + cmdPtr->byteOffset, cmpPtr->len - cmdPtr->byteOffset, result, bitpos, pRecvPtr) <= 0) {
+					char* dataBuf = malloc(cmdPtr->byteLength);
+					memcpy(dataBuf, recvBuf + cmdPtr->bytePosition, cmdPtr->byteLength);
+	
+					int i;
+					if (cmdPtr->bitLength)
+					{
+						char mask = 0;
+						int i;
+						for (i = cmdPtr->bitPosition; i < (cmdPtr->bitPosition + cmdPtr->bitLength); i++)
+							mask |= 1 << (7 - i % 8);
+
+						*dataBuf &= mask;
+
+						*dataBuf >>= (8 - cmdPtr->bitPosition - cmdPtr->bitLength);
+					}
+                    if (procGetUnit(cmpPtr->uPtr, dataBuf, cmdPtr->byteLength, result, bitpos, pRecvPtr) <= 0) {
                         logIT(LOG_ERR, "Fehler Unit Wandlung:%s", result);
+						free(dataBuf);
                         return(-1);
                     }
+					free(dataBuf);
                     strncpy(recvBuf, result, recvLen);
                     if (iniFD && *simIn && *simOut) /* wir haben gesendet und empfangen, das geben wir nun aus */
                         /* fprintf(iniFD,"%s= %s ;%s\n",simOut,simIn,result); */
@@ -459,12 +476,12 @@ int expand(commandPtr cPtr, protocolPtr pPtr) {
                 ePtr--;
             }
             else if (strstr(var, "len") == var) {
-                snprintf(string, sizeof(string), "%d", cPtr->len);
+                snprintf(string, sizeof(string), "%d", cPtr->blockLength);
                 strncpy(ePtr, string, strlen(string));
                 ePtr += strlen(string);
             }
             else if (strstr(var, "hexlen") == var) {
-                snprintf(string, sizeof(string), "%02X", cPtr->len);
+                snprintf(string, sizeof(string), "%02X", cPtr->blockLength);
                 strncpy(ePtr, string, strlen(string));
                 ePtr += strlen(string);
             }
