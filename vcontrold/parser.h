@@ -1,10 +1,12 @@
-/* parser.h */
-/* $Id: parser.h 34 2008-04-06 19:39:29Z marcust $ */
+#ifndef PARSER_H
+#define PARSER_H
 
-int parseLine(char *lineo, char *hex, int *hexlen, char *uSPtr, ssize_t uSPtrLen);
-int execCmd(char *cmd, int fd, char *result, int resultLen);
+#include "xmlconfig.h"
+
+int parseLine(char* lineo, char* hex, int* hexlen, char* uSPtr, ssize_t uSPtrLen);
+int execCmd(char* cmd, int fd, char* result, int resultLen);
 void removeCompileList(compilePtr ptr);
-int execByteCode(commandPtr cmdPtr, int fd, char *recvBuf, size_t recvLen, char *sendBuf, size_t sendLen, short supressUnit, char bitpos, int retry, char *pRecvPtr, unsigned short recvTimeout);
+int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen, char* sendBuf, size_t sendLen, short supressUnit, char bitpos, int retry, char* pRecvPtr, unsigned short recvTimeout);
 void compileCommand(devicePtr dPtr, unitPtr uPtr);
 
 /* Token Definition */
@@ -16,6 +18,7 @@ void compileCommand(devicePtr dPtr, unitPtr uPtr);
 #define BYTES   5
 
 #ifndef MAXBUF
-#define MAXBUF 4096
+    #define MAXBUF 4096
 #endif
 
+#endif /* PARSER_H */

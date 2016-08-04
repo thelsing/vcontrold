@@ -68,15 +68,15 @@
     <IncludePath>/usr/include/libxml2;H:\linuxincludes;H:\linuxincludes\libxml2;H:\linuxincludes\arm-linux-gnueabihf;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemGroup>
-    <ClCompile Include="arithmetic.c" />
-    <ClCompile Include="common.c" />
-    <ClCompile Include="framer.c" />
-    <ClCompile Include="io.c" />
-    <ClCompile Include="parser.c" />
-    <ClCompile Include="socket.c" />
-    <ClCompile Include="unit.c" />
-    <ClCompile Include="vcontrold.c" />
-    <ClCompile Include="xmlconfig.c" />
+    <ClCompile Include="arithmetic.cpp" />
+    <ClCompile Include="common.cpp" />
+    <ClCompile Include="framer.cpp" />
+    <ClCompile Include="io.cpp" />
+    <ClCompile Include="parser.cpp" />
+    <ClCompile Include="socket.cpp" />
+    <ClCompile Include="unit.cpp" />
+    <ClCompile Include="vcontrold.cpp" />
+    <ClCompile Include="xmlconfig.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="arithmetic.h" />

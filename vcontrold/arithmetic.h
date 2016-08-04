@@ -1,7 +1,7 @@
-/* arithemetic..h */
-/* Berechnung arithmetischer Ausdruecke */
-/* $Id: arithmetic.h 34 2008-04-06 19:39:29Z marcust $ */
+#ifndef ARITHMETIC_H
+    #define ARITHMETIC_H
 
-double execExpression(char **str, char *bPtr, double floatV, char *err);
-int execIExpression(char **str, char *bPtr, char bitpos, char *pPtr, char *err);
+    double execExpression(char** str, char* bInPtr, double floatV, char* err);
+    int execIExpression(char** str, char* bInPtr, char bitpos, char* pPtr, char* err);
 
+#endif /* ARITHMETIC_H */

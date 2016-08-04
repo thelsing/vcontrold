@@ -1,132 +1,139 @@
-/* xmlconfig.h */
-/* $Id: xmlconfig.h 34 2008-04-06 19:39:29Z marcust $ */
+#ifndef XMLCONFIG_H
+#define XMLCONFIG_H
 
 #include <arpa/inet.h>
 
 
-typedef struct config *configPtr;
-typedef struct protocol *protocolPtr;
-typedef struct unit *unitPtr;
-typedef struct macro *macroPtr;
-typedef struct command *commandPtr;
-typedef struct compile *compilePtr;
-typedef struct device *devicePtr;
-typedef struct icmd *icmdPtr;
-typedef struct allow *allowPtr;
-typedef struct enumerate *enumPtr;
+typedef struct config* configPtr;
+typedef struct protocol* protocolPtr;
+typedef struct unit* unitPtr;
+typedef struct macro* macroPtr;
+typedef struct command* commandPtr;
+typedef struct compile* compilePtr;
+typedef struct device* devicePtr;
+typedef struct icmd* icmdPtr;
+typedef struct allow* allowPtr;
+typedef struct enumerate* enumPtr;
 
 
-int parseXMLFile(char *filename);
-macroPtr getMacroNode(macroPtr ptr, const char *name);
-unitPtr getUnitNode(unitPtr ptr, const char *name);
-commandPtr getCommandNode(commandPtr ptr, const char *name);
+int parseXMLFile(char* filename);
+macroPtr getMacroNode(macroPtr ptr, const char* name);
+unitPtr getUnitNode(unitPtr ptr, const char* name);
+commandPtr getCommandNode(commandPtr ptr, const char* name);
 allowPtr getAllowNode(allowPtr ptr, in_addr_t testIP);
-enumPtr getEnumNode(enumPtr prt, char *search, size_t len);
-enumPtr getDefaultEnumNode(enumPtr ptr, char *search);
-icmdPtr getIcmdNode(icmdPtr ptr, const char *name);
+enumPtr getEnumNode(enumPtr prt, char* search, size_t len);
+enumPtr getDefaultEnumNode(enumPtr ptr, char* search);
+icmdPtr getIcmdNode(icmdPtr ptr, const char* name);
 
 
-struct allow {
-    char *text;
+typedef struct allow
+{
+    char* text;
     in_addr_t ip;
     in_addr_t mask;
     allowPtr next;
 } Allow;
 
-struct compile {
+typedef struct compile
+{
     int token;
-    char *send;
+    char* send;
     int len;
     unitPtr uPtr;
-    char *errStr;
+    char* errStr;
     compilePtr next;
 } Compile;
 
-
-
-struct config {
-    char *tty;
+typedef struct config
+{
+    char* tty;
     int port;
-    char *logfile;
-    char *devID;
+    char* logfile;
+    char* devID;
     devicePtr devPtr;
     allowPtr aPtr;
     int syslog;
     int debug;
 } Config;
 
-struct protocol {
-    char *name;
+typedef struct protocol
+{
+    char* name;
     char id;
     macroPtr mPtr;
     icmdPtr icPtr;
     protocolPtr next;
 } Protocol;
 
-struct device {
-    char *name;
-    char *id;
+typedef struct device
+{
+    char* name;
+    char* id;
     commandPtr cmdPtr;
     protocolPtr protoPtr;
     devicePtr next;
 } Device;
 
-struct unit {
-    char *name;
-    char *abbrev;
-    char *gCalc;
-    char *sCalc;
-    char *gICalc;
-    char *sICalc;
-    char *entity;
-    char *type;
+typedef struct unit
+{
+    char* name;
+    char* abbrev;
+    char* gCalc;
+    char* sCalc;
+    char* gICalc;
+    char* sICalc;
+    char* entity;
+    char* type;
     enumPtr ePtr;
     unitPtr next;
 } Unit;
 
-struct macro {
-    char *name;
-    char *command;
+typedef struct macro
+{
+    char* name;
+    char* command;
     macroPtr next;
 } Macro;
 
-struct command {
-    char *name;
-	char *shortDescription;
-    char *pcmd;
-    char *send;
-    char *addr;
-    char *unit;
-    char *errStr;
-    char *precmd;
+typedef struct command
+{
+    char* name;
+    char* shortDescription;
+    char* pcmd;
+    char* send;
+    char* addr;
+    char* unit;
+    char* errStr;
+    char* precmd;
     size_t blockLength;
     size_t bytePosition;
-	size_t byteLength;
-	size_t bitPosition;
-	size_t bitLength;
+    size_t byteLength;
+    size_t bitPosition;
+    size_t bitLength;
     int retry;
     unsigned short recvTimeout;
     char bit;
     char nodeType; /* 0==alles kopiert 1==alles Orig. 2== nur Adresse, unit len orig. */
     compilePtr cmpPtr;
-    char *description;
+    char* description;
     commandPtr next;
 } Command;
 
-struct icmd {
-    char *name;
-    char *send;
+typedef struct icmd
+{
+    char* name;
+    char* send;
     unsigned char retry;
     unsigned short recvTimeout;
     icmdPtr next;
 } iCmd;
 
-struct enumerate {
-    char *bytes;
+typedef struct enumerate
+{
+    char* bytes;
     size_t len;
-    char *text;
+    char* text;
     enumPtr next;
 } Enumerate;
 
-
-
+#endif /* XMLCONFIG_H */

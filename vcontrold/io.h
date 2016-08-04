@@ -1,14 +1,14 @@
-/* io.h
- *
-*/
-/* $Id: io.h 34 2008-04-06 19:39:29Z marcust $ */
+#ifndef IO_H
+#define IO_H
 
-int my_send(int fd, char *s_buf, size_t len);
-int receive(int fd, char *r_buf, int r_len, unsigned long *etime);
-size_t receive_nb(int fd, char *r_buf, size_t r_len, unsigned long *etime);
-int waitfor(int fd, char *w_buf, int w_len);
-int opentty(char *device);
-int openDevice(char *device);
+#include <cstdlib>
+
+int my_send(int fd, char* s_buf, size_t len);
+int receive(int fd, char* r_buf, int r_len, unsigned long* etime);
+size_t receive_nb(int fd, char* r_buf, size_t r_len, unsigned long* etime);
+int waitfor(int fd, char* w_buf, int w_len);
+int opentty(char* device);
+int openDevice(char* device);
 void closeDevice(int fd);
 
 
@@ -17,8 +17,8 @@ void closeDevice(int fd);
 #define TTY    "/dev/usb/tts/0"
 
 #ifndef MAXBUF
-#define MAXBUF 4096
+    #define MAXBUF 4096
 #endif
-#define TIMEOUT 5 
+#define TIMEOUT 5
 
-
+#endif /* IO_H */
