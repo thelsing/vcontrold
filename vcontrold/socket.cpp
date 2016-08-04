@@ -269,7 +269,7 @@ writen(int fd, const void* vptr, size_t n)
 ssize_t
 Writen(int fd, void* ptr, size_t nbytes)
 {
-    if (writen(fd, ptr, nbytes) != nbytes)
+    if (writen(fd, ptr, nbytes) != (ssize_t)nbytes)
     {
         logIT(LOG_ERR, "Fehler beim schreiben auf socket");
         return (0);
@@ -369,11 +369,11 @@ again:
 ssize_t
 readline(int fd, void* vptr, size_t maxlen)
 {
-    int		n;
     ssize_t rc;
     char	c, *ptr;
 
     ptr = (char*)vptr;
+    size_t n;
 
     for (n = 1; n < maxlen; n++)
     {
@@ -396,7 +396,7 @@ readline(int fd, void* vptr, size_t maxlen)
     }
 
     *ptr = 0;	/* null terminate like fgets() */
-    return (n);
+    return (ssize_t)n;
 }
 /* end readline */
 

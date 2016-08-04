@@ -16,7 +16,7 @@ typedef struct allow* allowPtr;
 typedef struct enumerate* enumPtr;
 
 
-int parseXMLFile(char* filename);
+int parseXMLFile(const char* filename);
 macroPtr getMacroNode(macroPtr ptr, const char* name);
 unitPtr getUnitNode(unitPtr ptr, const char* name);
 commandPtr getCommandNode(commandPtr ptr, const char* name);
@@ -95,6 +95,22 @@ typedef struct macro
     macroPtr next;
 } Macro;
 
+enum Parameter
+{
+    Byte,
+    SByte,
+    Int,
+    SInt,
+    Int4,
+    SInt4,
+    Array,
+};
+
+enum Conversion
+{
+    NoConversion,
+};
+
 typedef struct command
 {
     char* name;
@@ -105,6 +121,8 @@ typedef struct command
     char* unit;
     char* errStr;
     char* precmd;
+    Parameter parameter;
+    Conversion conversion;
     size_t blockLength;
     size_t bytePosition;
     size_t byteLength;

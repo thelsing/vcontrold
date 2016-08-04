@@ -1,7 +1,6 @@
 /*
  * Testprogramm fuer Vito- Abfrage
  *  */
-/* $Id: common.c 26 2008-03-20 20:56:09Z marcust $ */
 #ifndef _GNU_SOURCE
     #define _GNU_SOURCE
 #endif
@@ -16,12 +15,7 @@
 #include <stdarg.h>
 
 #include"common.h"
-/* #include"parser.h" */
 
-
-
-
-/* globale Variablen */
 int syslogger = 0;
 int debug = 0;
 FILE* logFD;

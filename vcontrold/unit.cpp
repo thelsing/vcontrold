@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <ctype.h>
 #include <arpa/inet.h>
+#include <stdexcept>
 
 #ifdef __linux__
     #include <asm/byteorder.h>
@@ -257,7 +258,6 @@ short bytes2Enum(enumPtr ptr, char* bytes, char** text, size_t len)
 
 int getErrState(enumPtr ePtr, char* recv, size_t len, char* result)
 {
-    int i;
     char* errtext;
     char systime[35];
     char string[300];
@@ -270,7 +270,7 @@ int getErrState(enumPtr ePtr, char* recv, size_t len, char* result)
         return (0);
     }
 
-    for (i = 0; i < len; i += 9)
+    for (size_t i = 0; i < len; i += 9)
     {
         ptr = recv + i;
         bzero(string, sizeof(string));
@@ -321,405 +321,310 @@ size_t text2Enum(enumPtr ptr, char* text, char** bytes, size_t* len)
     return (*len);
 }
 
-
-int procGetUnit(unitPtr uPtr, char* recvBuf, size_t recvLen, char* result, char bitpos, char* pRecvPtr)
+template<typename T>
+void convert(commandPtr cmdPtr, T value, char* result)
 {
-    char string[256];
-    char error[1000];
-    char buffer[MAXBUF];
-    char* errPtr = error;
-    /* 	short t; */
-    double erg;
-    int ergI;
-    char formatI[20];
-    double floatV = 0;
-    char* inPtr;
-    char* tPtr;
-    /* hier die Typen fuer die Umrechnung in <type> Tag */
-    int8_t charV;
-    uint8_t ucharV;
-    int16_t shortV;
-    int16_t tmpS;
-    uint16_t ushortV;
-    uint16_t tmpUS;
-    int32_t intV;
-    int32_t tmpI;
-    uint32_t tmpUI;
-    uint32_t uintV;
+    switch (cmdPtr->conversion)
+    {
+        case NoConversion:
+            sprintf(result, "%d", value);
+            break;
 
+        default:
+            throw std::logic_error("no conversion found!");
+            break;
+    }
+}
 
-    bzero(errPtr, sizeof(error));
+void procGetUnit(commandPtr cmdPtr, unitPtr uPtr, char* recvBuf, size_t recvLen, char* result, char bitpos, char* pRecvPtr)
+{
+    if (cmdPtr->parameter == Byte && recvLen == 1)
+    {
+        uint8_t value = (uint8_t)recvBuf[0];
+        convert(cmdPtr, value, result);
+        return;
+    }
+    else if (cmdPtr->parameter == SByte && recvLen == 1)
+    {
+        int8_t value = (int8_t)recvBuf[0];
+        convert(cmdPtr, value, result);
+        return;
+    }
+    else if (cmdPtr->parameter == Int && recvLen == 2)
+    {
+        short tmp;
+        memcpy(&tmp, recvBuf, recvLen);
 
-    /* wir behandeln die verschiedenen <type> Eintraege */
+        uint16_t value = (uint16_t)__le16_to_cpu(tmp);
+        convert(cmdPtr, value, result);
+        return;
+    }
+    else if (cmdPtr->parameter == SInt && recvLen == 2)
+    {
+        short tmp;
+        memcpy(&tmp, recvBuf, recvLen);
+
+        int16_t value = (int16_t)__le16_to_cpu(tmp);
+        convert(cmdPtr, value, result);
+        return;
+    }
+    else if (cmdPtr->parameter == Int4 && recvLen == 4)
+    {
+        int tmp;
+        memcpy(&tmp, recvBuf, recvLen);
+
+        uint32_t value = (uint32_t)__le32_to_cpu(tmp);
+        convert(cmdPtr, value, result);
+        return;
+    }
+    else if (cmdPtr->parameter == SInt4 && recvLen == 4)
+    {
+        int tmp;
+        memcpy(&tmp, recvBuf, recvLen);
+
+        int32_t value = (int32_t)__le32_to_cpu(tmp);
+        convert(cmdPtr, value, result);
+        return;
+    }
+    else if (cmdPtr->parameter == Array)
+        throw std::logic_error("Array not implemented yet");
 
     if (strstr(uPtr->type, "cycletime") == uPtr->type)   /* Schaltzeit */
     {
-        if (getCycleTime(recvBuf, recvLen, result))
-            return (1);
-        else
-            return (-1);
+        if (!getCycleTime(recvBuf, recvLen, result))
+            throw std::logic_error("error in conversioin");
     }
     else if (strstr(uPtr->type, "systime") == uPtr->type)   /* Systemzeit */
     {
-        if (getSysTime(recvBuf, recvLen, result))
-            return (1);
-        else
-            return (-1);
+        if (!getSysTime(recvBuf, recvLen, result))
+            throw std::logic_error("error in conversioin");
     }
     else if (strstr(uPtr->type, "errstate") == uPtr->type)   /* Errrocode + Systemzeit */
     {
-        if (getErrState(uPtr->ePtr, recvBuf, recvLen, result))
-            return (1);
-        else
-            return (-1);
+        if (!getErrState(uPtr->ePtr, recvBuf, recvLen, result))
+            throw std::logic_error("error in conversioin");
     }
     else if (strstr(uPtr->type, "enum") == uPtr->type)   /*enum*/
     {
-        if (bytes2Enum(uPtr->ePtr, recvBuf, &tPtr, recvLen))
-        {
-            strcpy(result, tPtr);
-            return (1);
-        }
-        else
-        {
-            sprintf(result, "Kein passendes Enum gefunden");
-            return (-1);
-        }
+        char* tPtr;
+
+        if (!bytes2Enum(uPtr->ePtr, recvBuf, &tPtr, recvLen))
+            throw std::logic_error("error in conversioin");
+
+        strcpy(result, tPtr);
+        return;
     }
 
-
-
-
-
-
-
-    /* hier kommen die ganzen numerischen Typen */
-
-
-    if (strstr(uPtr->type, "char") == uPtr->type)   /* Umrechnung in Char 1Byte */
-    {
-        memcpy(&charV, recvBuf, 1);
-        floatV = charV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
-        sprintf(formatI, "%%02X %%s");
-    }
-    else if (strstr(uPtr->type, "uchar") == uPtr->type)   /* Umrechnung in Unsigned Char 1Byte */
-    {
-        memcpy(&ucharV, recvBuf, 1);
-        floatV = ucharV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
-        sprintf(formatI, "%%02X %%s");
-    }
-    else if (strstr(uPtr->type, "short") == uPtr->type)   /* Umrechnung in Short 2Byte */
-    {
-        memcpy(&tmpS, recvBuf, 2);
-        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-        shortV = (int16_t) __le16_to_cpu(tmpS);
-        floatV = shortV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
-        sprintf(formatI, "%%04X %%s");
-    }
-    else if (strstr(uPtr->type, "ushort") == uPtr->type)   /* Umrechnung in Short 2Byte */
-    {
-        memcpy(&tmpUS, recvBuf, 2);
-        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-        ushortV = __le16_to_cpu(tmpUS);
-        floatV = ushortV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
-        sprintf(formatI, "%%04X %%s");
-    }
-    else if (strstr(uPtr->type, "int") == uPtr->type)   /* Umrechnung in Int 4Byte */
-    {
-        memcpy(&tmpI, recvBuf, 4);
-        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-        intV = (int32_t)__le32_to_cpu(tmpI);
-        floatV = intV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
-        sprintf(formatI, "%%08X %%s");
-    }
-    else if (strstr(uPtr->type, "uint") == uPtr->type)   /* Umrechnung in Unsigned Int 4Byte */
-    {
-        memcpy(&tmpUI, recvBuf, 4);
-        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-        uintV = __le32_to_cpu(tmpUI);
-        floatV = uintV; /* impliziete Typumnwandlung nach double fuer unsere Arithmetic */
-        sprintf(formatI, "%%08X %%s");
-    }
-    else if (uPtr->type)
-    {
-        logIT(LOG_ERR, "Unbekannter Typ %s in Unit %s", uPtr->type, uPtr->name);
-        return (-1);
-    }
-
-
-    /* etwas logging */
-    int n;
-    char* ptr;
-    char res;
-    ptr = recvBuf;
-    bzero(buffer, sizeof(buffer));
-
-    for (n = 0; n <= 9; n++)  /* Bytes 0..9 sind von Interesse */
-    {
-        bzero(string, sizeof(string));
-        unsigned char byte = *ptr++ & 255;
-        snprintf(string, sizeof(string), "B%d:%02X ", n, byte);
-        strcat(buffer, string);
-
-        if (n >= MAXBUF - 3)
-            break;
-    }
-
-    if (uPtr->gCalc && *uPtr->gCalc)   /* <calc im XML und get darin definiert */
-    {
-        logIT(LOG_INFO, "Typ: %s (in double: %f)", uPtr->type, floatV);
-        inPtr = uPtr->gCalc;
-        logIT(LOG_INFO, "(FLOAT) Exp:%s [%s]", inPtr, buffer);
-        erg = execExpression(&inPtr, recvBuf, floatV, errPtr);
-
-        if (*errPtr)
-        {
-            logIT(LOG_ERR, "Exec %s: %s", uPtr->gCalc, error);
-            strcpy(result, string);
-            return (-1);
-        }
-
-        sprintf(result, "%f %s", erg, uPtr->entity);
-    }
-    else if (uPtr->gICalc && *uPtr->gICalc)   /* <icalc im XML und get darin definiert */
-    {
-        inPtr = uPtr->gICalc;
-        logIT(LOG_INFO, "(INT) Exp:%s [BP:%d] [%s]", inPtr, bitpos, buffer);
-        ergI = execIExpression(&inPtr, recvBuf, bitpos, pRecvPtr, errPtr);
-
-        if (*errPtr)
-        {
-            logIT(LOG_ERR, "Exec %s: %s", uPtr->gCalc, error);
-            strcpy(result, string);
-            return (-1);
-        }
-
-        logIT(LOG_INFO, "Erg: (Hex max. 4Byte) %08x", ergI);
-        res = ergI;
-
-        if (uPtr->ePtr && bytes2Enum(uPtr->ePtr, &res, &tPtr, recvLen))
-        {
-            strcpy(result, tPtr);
-            return (1);
-        }
-        else
-        {
-            sprintf(result, formatI, ergI, uPtr->entity);
-            return (1);
-        }
-
-
-        /* hier noch das durchsuchen der enums ggf durchfuehren */
-    }
-
-    return (1);
+    logIT(LOG_ERR, "Unbekannter Typ %d", uPtr->type, uPtr->name);
+    throw std::logic_error("error in conversioin");
+    return;
 }
 
 
 int procSetUnit(unitPtr uPtr, char* sendBuf, size_t* sendLen, char bitpos, char* pRecvPtr)
 {
-    char string[256];
-    char error[1000];
-    char buffer[MAXBUF];
-    char input[MAXBUF];
-    char* errPtr = error;
-    /* 	short t; */
-    double erg = 0.0;
-    int ergI = 0;
-    short count;
-    char ergType;
-    double floatV;
-    char* inPtr;
-    /* hier die Typen fuer die Umrechnung in <type> Tag */
-    int8_t charV;
-    uint8_t ucharV;
-    int16_t shortV;
-    int16_t tmpS;
-    uint16_t ushortV;
-    uint16_t tmpUS;
-    int32_t intV;
-    int32_t tmpI;
-    uint32_t tmpUI;
-    uint32_t uintV;
+    //char string[256];
+    //char error[1000];
+    //char buffer[MAXBUF];
+    //char input[MAXBUF];
+    //char* errPtr = error;
+    ///* 	short t; */
+    //double erg = 0.0;
+    //int ergI = 0;
+    //short count;
+    //char ergType;
+    //double floatV;
+    //char* inPtr;
+    ///* hier die Typen fuer die Umrechnung in <type> Tag */
+    //int8_t charV;
+    //uint8_t ucharV;
+    //int16_t shortV;
+    //int16_t tmpS;
+    //uint16_t ushortV;
+    //uint16_t tmpUS;
+    //int32_t intV;
+    //int32_t tmpI;
+    //uint32_t tmpUI;
+    //uint32_t uintV;
 
 
-    bzero(errPtr, sizeof(error));
-    /* etwas logging */
-    int n = 0;
-    char* ptr;
-    char dumBuf[10];
-    bzero(dumBuf, sizeof(dumBuf));
-    bzero(buffer, sizeof(buffer));
-    /* wir kopieren uns den sendBuf, da dieser auch als return genutzt wird */
-    strncpy(input, sendBuf, sizeof(input));
-    bzero(sendBuf, sizeof(sendBuf));
+    //bzero(errPtr, sizeof(error));
+    ///* etwas logging */
+    //int n = 0;
+    //char* ptr;
+    //char dumBuf[10];
+    //bzero(dumBuf, sizeof(dumBuf));
+    //bzero(buffer, sizeof(buffer));
+    ///* wir kopieren uns den sendBuf, da dieser auch als return genutzt wird */
+    //strncpy(input, sendBuf, sizeof(input));
+    //bzero(sendBuf, sizeof(sendBuf));
 
 
-    if (strstr(uPtr->type, "cycletime") == uPtr->type)   /* Schaltzeit */
-    {
-        if (!*input)
-            return (-1);
+    //if (strstr(uPtr->type, "cycletime") == uPtr->type)   /* Schaltzeit */
+    //{
+    //    if (!*input)
+    //        return (-1);
 
-        if (!(*sendLen = setCycleTime(input, sendBuf)))
-            return (-1);
-        else
-            return (1);
-    }
+    //    if (!(*sendLen = setCycleTime(input, sendBuf)))
+    //        return (-1);
+    //    else
+    //        return (1);
+    //}
 
-    if (strstr(uPtr->type, "systime") == uPtr->type)   /* Schaltzeit */
-    {
-        if (!(*sendLen = setSysTime(input, sendBuf, *sendLen)))
-            return (-1);
-        else
-            return (1);
-    }
-    else if (strstr(uPtr->type, "enum") == uPtr->type)   /*enum*/
-    {
-        if (!*input)
-            return (-1);
+    //if (strstr(uPtr->type, "systime") == uPtr->type)   /* Schaltzeit */
+    //{
+    //    if (!(*sendLen = setSysTime(input, sendBuf, *sendLen)))
+    //        return (-1);
+    //    else
+    //        return (1);
+    //}
+    //else if (strstr(uPtr->type, "enum") == uPtr->type)   /*enum*/
+    //{
+    //    if (!*input)
+    //        return (-1);
 
-        if (!(count = text2Enum(uPtr->ePtr, input, &ptr, sendLen)))
-        {
-            sprintf(sendBuf, "Kein passendes Enum gefunden");
-            return (-1);
-        }
-        else
-        {
-            memcpy(sendBuf, ptr, count);
-            return (1);
-        }
-    }
+    //    if (!(count = text2Enum(uPtr->ePtr, input, &ptr, sendLen)))
+    //    {
+    //        sprintf(sendBuf, "Kein passendes Enum gefunden");
+    //        return (-1);
+    //    }
+    //    else
+    //    {
+    //        memcpy(sendBuf, ptr, count);
+    //        return (1);
+    //    }
+    //}
 
-    if (!*input)
-        return (-1);
+    //if (!*input)
+    //    return (-1);
 
-    /* hier der uebergebene Wert */
-    if (uPtr->sCalc && *uPtr->sCalc)   /* <calc im XML und set darin definiert */
-    {
-        floatV = atof(input);
-        inPtr = uPtr->sCalc;
-        logIT(LOG_INFO, "Send Exp:%s [V=%f]", inPtr, floatV);
-        erg = execExpression(&inPtr, dumBuf, floatV, errPtr);
+    ///* hier der uebergebene Wert */
+    //if (uPtr->sCalc && *uPtr->sCalc)   /* <calc im XML und set darin definiert */
+    //{
+    //    floatV = atof(input);
+    //    inPtr = uPtr->sCalc;
+    //    logIT(LOG_INFO, "Send Exp:%s [V=%f]", inPtr, floatV);
+    //    erg = execExpression(&inPtr, dumBuf, floatV, errPtr);
 
-        if (*errPtr)
-        {
-            logIT(LOG_ERR, "Exec %s: %s", uPtr->sCalc, error);
-            strcpy(sendBuf, string);
-            return (-1);
-        }
+    //    if (*errPtr)
+    //    {
+    //        logIT(LOG_ERR, "Exec %s: %s", uPtr->sCalc, error);
+    //        strcpy(sendBuf, string);
+    //        return (-1);
+    //    }
 
-        ergType = FLOAT;
-    }
+    //    ergType = FLOAT;
+    //}
 
-    if (uPtr->sICalc && *uPtr->sICalc)   /* <icalc im XML und set darin definiert */
-    {
-        inPtr = uPtr->sICalc;
+    //if (uPtr->sICalc && *uPtr->sICalc)   /* <icalc im XML und set darin definiert */
+    //{
+    //    inPtr = uPtr->sICalc;
 
-        if (uPtr->ePtr)  /* es gibt enums hier */
-        {
-            if (!*input)
-            {
-                sprintf(sendBuf, "Input fehlt");
-                return (-1);
-            }
+    //    if (uPtr->ePtr)  /* es gibt enums hier */
+    //    {
+    //        if (!*input)
+    //        {
+    //            sprintf(sendBuf, "Input fehlt");
+    //            return (-1);
+    //        }
 
-            if (!(count = text2Enum(uPtr->ePtr, input, &ptr, sendLen)))
-            {
-                sprintf(sendBuf, "Kein passendes Enum gefunden");
-                return (-1);
-            }
-            else
-            {
-                bzero(dumBuf, sizeof(dumBuf));
-                memcpy(dumBuf, ptr, count);
-                logIT(LOG_INFO, "(INT) Exp:%s [BP:%d]", inPtr, bitpos);
-                ergI = execIExpression(&inPtr, dumBuf, bitpos, pRecvPtr, errPtr);
+    //        if (!(count = text2Enum(uPtr->ePtr, input, &ptr, sendLen)))
+    //        {
+    //            sprintf(sendBuf, "Kein passendes Enum gefunden");
+    //            return (-1);
+    //        }
+    //        else
+    //        {
+    //            bzero(dumBuf, sizeof(dumBuf));
+    //            memcpy(dumBuf, ptr, count);
+    //            logIT(LOG_INFO, "(INT) Exp:%s [BP:%d]", inPtr, bitpos);
+    //            ergI = execIExpression(&inPtr, dumBuf, bitpos, pRecvPtr, errPtr);
 
-                if (*errPtr)
-                {
-                    logIT(LOG_ERR, "Exec %s: %s", uPtr->sICalc, error);
-                    strcpy(sendBuf, string);
-                    return (-1);
-                }
+    //            if (*errPtr)
+    //            {
+    //                logIT(LOG_ERR, "Exec %s: %s", uPtr->sICalc, error);
+    //                strcpy(sendBuf, string);
+    //                return (-1);
+    //            }
 
-                ergType = INT;
-                snprintf(string, sizeof(string), "Erg: (Hex max. 4Byte) %08x", ergI);
-            }
-        }
-    }
+    //            ergType = INT;
+    //            snprintf(string, sizeof(string), "Erg: (Hex max. 4Byte) %08x", ergI);
+    //        }
+    //    }
+    //}
 
-    /* das Ergebnis steht in erg und muss nun je nach typ umgewandelt werden */
-    if (uPtr->type)
-    {
-        if (strstr(uPtr->type, "char") == uPtr->type)   /* Umrechnung in Short 2Byte */
-        {
-            /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-            (ergType == FLOAT) ? (charV = erg) : (charV = ergI);
-            memcpy(sendBuf, &charV, 1);
-            *sendLen = 1;
-        }
-        else if (strstr(uPtr->type, "uchar") == uPtr->type)
-        {
-            /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-            (ergType == FLOAT) ? (ucharV = erg) : (ucharV = ergI);
-            memcpy(sendBuf, &ucharV, 1);
-            *sendLen = 1;
-        }
-        else if (strstr(uPtr->type, "short") == uPtr->type)
-        {
-            /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-            (ergType == FLOAT) ? (tmpS = erg) : (tmpS = ergI);
-            shortV = __cpu_to_le16(tmpS);
-            memcpy(sendBuf, &shortV, 2);
-            *sendLen = 2;
-        }
-        else if (strstr(uPtr->type, "ushort") == uPtr->type)
-        {
-            /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-            (ergType == FLOAT) ? (tmpUS = erg) : (tmpUS = ergI);
-            ushortV = __cpu_to_le16(tmpUS);
-            memcpy(sendBuf, &ushortV, 2);
-            *sendLen = 2;
-        }
-        else if (strstr(uPtr->type, "int") == uPtr->type)
-        {
-            /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-            (ergType == FLOAT) ? (tmpI = erg) : (tmpI = ergI);
-            intV = __cpu_to_le32(tmpI);
-            memcpy(sendBuf, &intV, 2);
-            *sendLen = 4;
-        }
-        else if (strstr(uPtr->type, "uint") == uPtr->type)
-        {
-            /* je nach CPU Typ wird hier die Wandlung vorgenommen */
-            (ergType == FLOAT) ? (tmpUI = erg) : (tmpUI = ergI);
-            uintV = __cpu_to_le32(tmpUI);
-            memcpy(sendBuf, &uintV, 2);
-        }
-        else if (uPtr->type)
-        {
-            bzero(string, sizeof(string));
-            logIT(LOG_ERR, "Unbekannter Typ %s in Unit %s", uPtr->type, uPtr->name);
-            return (-1);
-        }
+    ///* das Ergebnis steht in erg und muss nun je nach typ umgewandelt werden */
+    //if (uPtr->type)
+    //{
+    //    if (strstr(uPtr->type, "char") == uPtr->type)   /* Umrechnung in Short 2Byte */
+    //    {
+    //        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
+    //        (ergType == FLOAT) ? (charV = erg) : (charV = ergI);
+    //        memcpy(sendBuf, &charV, 1);
+    //        *sendLen = 1;
+    //    }
+    //    else if (strstr(uPtr->type, "uchar") == uPtr->type)
+    //    {
+    //        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
+    //        (ergType == FLOAT) ? (ucharV = erg) : (ucharV = ergI);
+    //        memcpy(sendBuf, &ucharV, 1);
+    //        *sendLen = 1;
+    //    }
+    //    else if (strstr(uPtr->type, "short") == uPtr->type)
+    //    {
+    //        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
+    //        (ergType == FLOAT) ? (tmpS = erg) : (tmpS = ergI);
+    //        shortV = __cpu_to_le16(tmpS);
+    //        memcpy(sendBuf, &shortV, 2);
+    //        *sendLen = 2;
+    //    }
+    //    else if (strstr(uPtr->type, "ushort") == uPtr->type)
+    //    {
+    //        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
+    //        (ergType == FLOAT) ? (tmpUS = erg) : (tmpUS = ergI);
+    //        ushortV = __cpu_to_le16(tmpUS);
+    //        memcpy(sendBuf, &ushortV, 2);
+    //        *sendLen = 2;
+    //    }
+    //    else if (strstr(uPtr->type, "int") == uPtr->type)
+    //    {
+    //        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
+    //        (ergType == FLOAT) ? (tmpI = erg) : (tmpI = ergI);
+    //        intV = __cpu_to_le32(tmpI);
+    //        memcpy(sendBuf, &intV, 2);
+    //        *sendLen = 4;
+    //    }
+    //    else if (strstr(uPtr->type, "uint") == uPtr->type)
+    //    {
+    //        /* je nach CPU Typ wird hier die Wandlung vorgenommen */
+    //        (ergType == FLOAT) ? (tmpUI = erg) : (tmpUI = ergI);
+    //        uintV = __cpu_to_le32(tmpUI);
+    //        memcpy(sendBuf, &uintV, 2);
+    //    }
+    //    else if (uPtr->type)
+    //    {
+    //        bzero(string, sizeof(string));
+    //        logIT(LOG_ERR, "Unbekannter Typ %s in Unit %s", uPtr->type, uPtr->name);
+    //        return (-1);
+    //    }
 
-        bzero(buffer, sizeof(buffer));
-        ptr = sendBuf;
+    //    bzero(buffer, sizeof(buffer));
+    //    ptr = sendBuf;
 
-        while (*ptr)
-        {
-            bzero(string, sizeof(string));
-            unsigned char byte = *ptr++ & 255;
-            snprintf(string, sizeof(string), "%02X ", byte);
-            strcat(buffer, string);
+    //    while (*ptr)
+    //    {
+    //        bzero(string, sizeof(string));
+    //        unsigned char byte = *ptr++ & 255;
+    //        snprintf(string, sizeof(string), "%02X ", byte);
+    //        strcat(buffer, string);
 
-            if (n >= MAXBUF - 3)	/* FN Wo wird 'n' eigentlich initialisiert */
-                break;
-        }
+    //        if (n >= MAXBUF - 3)	/* FN Wo wird 'n' eigentlich initialisiert */
+    //            break;
+    //    }
 
-        logIT(LOG_INFO, "Typ: %s (Bytes: %s)  ", uPtr->type, buffer);
-        return (1);
-    }
+    //    logIT(LOG_INFO, "Typ: %s (Bytes: %s)  ", uPtr->type, buffer);
+    //    return (1);
+    //}
 
     return (0);	/* Wenn ich das richtig verstehe, sollten wir hier nie landen FN, deshalb; keep compiler happy */
 }

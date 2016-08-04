@@ -144,7 +144,7 @@ int my_send(int fd, char* s_buf, size_t len)
     /* wir benutzen die Socket feste Vairante aus socket.c */
     writen(fd, s_buf, len);
 
-    for (i = 0; i < len; i++)
+    for (size_t i = 0; i < len; i++)
     {
 
         unsigned char byte = s_buf[i] & 255;

@@ -13,6 +13,7 @@
 #include <time.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <memory>
 
 #include "xmlconfig.h"
 #include "parser.h"
@@ -307,17 +308,14 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
 
                     if (!supressUnit && cmpPtr->uPtr)
                     {
-                        char* dataBuf = (char*)malloc(cmdPtr->byteLength);
-                        memcpy(dataBuf, recvBuf + cmdPtr->bytePosition, cmdPtr->byteLength);
-
-                        int i;
+                        std::shared_ptr<char> dataBuf((char*)malloc(cmdPtr->byteLength), free);
+                        memcpy(dataBuf.get(), recvBuf + cmdPtr->bytePosition, cmdPtr->byteLength);
 
                         if (cmdPtr->bitLength)
                         {
                             char mask = 0;
-                            int i;
 
-                            for (i = cmdPtr->bitPosition; i < (cmdPtr->bitPosition + cmdPtr->bitLength); i++)
+                            for (char i = cmdPtr->bitPosition; i < (cmdPtr->bitPosition + cmdPtr->bitLength); i++)
                                 mask |= 1 << (7 - i % 8);
 
                             *dataBuf &= mask;
@@ -325,14 +323,8 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                             *dataBuf >>= (8 - cmdPtr->bitPosition - cmdPtr->bitLength);
                         }
 
-                        if (procGetUnit(cmpPtr->uPtr, dataBuf, cmdPtr->byteLength, result, bitpos, pRecvPtr) <= 0)
-                        {
-                            logIT(LOG_ERR, "Fehler Unit Wandlung:%s", result);
-                            free(dataBuf);
-                            return (-1);
-                        }
+                        procGetUnit(cmdPtr, cmpPtr->uPtr, dataBuf.get(), cmdPtr->byteLength, result, bitpos, pRecvPtr);
 
-                        free(dataBuf);
                         strncpy(recvBuf, result, recvLen);
 
                         if (iniFD && *simIn && *simOut) /* wir haben gesendet und empfangen, das geben wir nun aus */
@@ -727,9 +719,8 @@ compilePtr buildByteCode(commandPtr cPtr, unitPtr uPtr)
     cmpStartPtr = NULL;
 
 
-    char* sendPtr, *sendStartPtr;
+    char* sendPtr;
     sendPtr = cPtr->send;
-    sendStartPtr = cPtr->send;
 
     if (!sendPtr) /* hier gibt es nichts zu tun */
         return (0);
