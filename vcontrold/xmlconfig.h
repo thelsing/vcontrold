@@ -6,23 +6,18 @@
 
 typedef struct config* configPtr;
 typedef struct protocol* protocolPtr;
-typedef struct unit* unitPtr;
 typedef struct macro* macroPtr;
 typedef struct command* commandPtr;
 typedef struct compile* compilePtr;
 typedef struct device* devicePtr;
 typedef struct icmd* icmdPtr;
 typedef struct allow* allowPtr;
-typedef struct enumerate* enumPtr;
 
 
 int parseXMLFile(const char* filename);
 macroPtr getMacroNode(macroPtr ptr, const char* name);
-unitPtr getUnitNode(unitPtr ptr, const char* name);
 commandPtr getCommandNode(commandPtr ptr, const char* name);
 allowPtr getAllowNode(allowPtr ptr, in_addr_t testIP);
-enumPtr getEnumNode(enumPtr prt, char* search, size_t len);
-enumPtr getDefaultEnumNode(enumPtr ptr, char* search);
 icmdPtr getIcmdNode(icmdPtr ptr, const char* name);
 
 
@@ -39,7 +34,6 @@ typedef struct compile
     int token;
     char* send;
     size_t len;
-    unitPtr uPtr;
     char* errStr;
     compilePtr next;
 } Compile;
@@ -73,20 +67,6 @@ typedef struct device
     protocolPtr protoPtr;
     devicePtr next;
 } Device;
-
-typedef struct unit
-{
-    char* name;
-    char* abbrev;
-    char* gCalc;
-    char* sCalc;
-    char* gICalc;
-    char* sICalc;
-    char* entity;
-    char* type;
-    enumPtr ePtr;
-    unitPtr next;
-} Unit;
 
 typedef struct macro
 {
@@ -134,7 +114,6 @@ typedef struct command
     char* pcmd;
     char* send;
     char* addr;
-    char* unit;
     char* errStr;
     char* precmd;
     Parameter parameter;
@@ -148,7 +127,6 @@ typedef struct command
     char bitLength;
     int retry;
     unsigned short recvTimeout;
-    char bit;
     char nodeType; /* 0==alles kopiert 1==alles Orig. 2== nur Adresse, unit len orig. */
     compilePtr cmpPtr;
     char* description;
@@ -163,13 +141,5 @@ typedef struct icmd
     unsigned short recvTimeout;
     icmdPtr next;
 } iCmd;
-
-typedef struct enumerate
-{
-    char* bytes;
-    size_t len;
-    char* text;
-    enumPtr next;
-} Enumerate;
 
 #endif /* XMLCONFIG_H */

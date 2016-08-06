@@ -17,7 +17,7 @@
 
 #include "xmlconfig.h"
 #include "parser.h"
-#include "unit.h"
+#include "conversion.h"
 #include "common.h"
 #include "io.h"
 #include "framer.h"
@@ -143,8 +143,7 @@ int parseLine(char* line, char* hex, int* hexlen, char* uSPtr, ssize_t uSPtrLen)
 
 int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                  char* sendBuf, size_t sendLen, short supressUnit,
-                 char bitpos, int retry,
-                 char* pRecvPtr, unsigned short recvTimeout)
+                 int retry, char* pRecvPtr, unsigned short recvTimeout)
 {
 
     compilePtr cmpPtr = cmdPtr->cmpPtr;
@@ -173,25 +172,20 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                 continue;
             }
 
-            if (cPtr->uPtr)
+
+            convertBack(cmdPtr, sendBuf, &len);
+
+
+            if (cPtr->send)   /* wir haben das schon mal gesendet, der Speicher war noch alloziert */
             {
-                if (procSetUnit(cPtr->uPtr, sendBuf, &len, bitpos, pRecvPtr) <= 0)
-                {
-                    logIT(LOG_ERR, "Fehler Unit Wandlung:%s", sendBuf);
-                    return (-1);
-                }
-
-                if (cPtr->send)   /* wir haben das schon mal gesendet, der Speicher war noch alloziert */
-                {
-                    free(cPtr->send);
-                    cPtr->send = NULL;
-                }
-
-                cPtr->send = (char*)calloc(len, sizeof(char));
-                cPtr->len = len;
-                sendLen = 0; /* wir senden nicht den ungewandelten sendBuf */
-                memcpy(cPtr->send, sendBuf, len);
+                free(cPtr->send);
+                cPtr->send = NULL;
             }
+
+            cPtr->send = (char*)calloc(len, sizeof(char));
+            cPtr->len = len;
+            sendLen = 0; /* wir senden nicht den ungewandelten sendBuf */
+            memcpy(cPtr->send, sendBuf, len);
 
             cPtr = cPtr->next;
         }
@@ -306,7 +300,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                      * empfangenen Wert um, und geben den umgerechneten Wert auch in uPtr zurueck */
                     bzero(result, sizeof(result));
 
-                    if (!supressUnit && cmpPtr->uPtr)
+                    if (!supressUnit)
                     {
                         std::shared_ptr<char> dataBuf((char*)malloc(cmdPtr->byteLength), free);
                         memcpy(dataBuf.get(), recvBuf + cmdPtr->bytePosition, cmdPtr->byteLength);
@@ -323,7 +317,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                             *dataBuf = (char)(*dataBuf >> shiftLength);
                         }
 
-                        procGetUnit(cmdPtr, cmpPtr->uPtr, dataBuf.get(), cmdPtr->byteLength, result, bitpos, pRecvPtr);
+                        convertToString(cmdPtr, dataBuf.get(), cmdPtr->byteLength, result);
 
                         strncpy(recvBuf, result, recvLen);
 
@@ -495,7 +489,6 @@ compilePtr newCompileNode(compilePtr ptr)
 
     nptr->token = 0;
     nptr->len = 0;
-    nptr->uPtr = NULL;
     nptr->next = NULL;
     return (nptr);
 }
@@ -614,14 +607,6 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
                 strncpy(ePtr, string, strlen(string));
                 ePtr += strlen(string);
             }
-            else if (strstr(var, "unit") == var)
-            {
-                if (cPtr->unit)
-                {
-                    strncpy(ePtr, cPtr->unit, strlen(cPtr->unit));
-                    ePtr += strlen(cPtr->unit);
-                }
-            }
             else
             {
                 logIT(LOG_ERR, "Variable %s unbekannt", var);
@@ -688,14 +673,14 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
     return (1);
 }
 
-compilePtr buildByteCode(commandPtr cPtr, unitPtr uPtr)
+compilePtr buildByteCode(commandPtr cPtr)
 {
     /* Rekursion */
     if (!cPtr)
         return (0);
 
     if (cPtr->next)
-        buildByteCode(cPtr->next, uPtr);
+        buildByteCode(cPtr->next);
 
     /* falls keine Adresse gesetzt ist machen wir nichts */
     if (!cPtr->addr)
@@ -751,13 +736,6 @@ compilePtr buildByteCode(commandPtr cPtr, unitPtr uPtr)
         cmpPtr->errStr = cPtr->errStr;
         cmpPtr->send = (char*)calloc(hexlen, sizeof(char));
         memcpy(cmpPtr->send, hex, hexlen);
-
-        if (*uSPtr && !(cmpPtr->uPtr = getUnitNode(uPtr, uSPtr)))
-        {
-            logIT(LOG_ERR, "Unit %s nicht definiert", uSPtr);
-            exit(3);
-        }
-
         sendPtr += strlen(cmd) + 1;
     }
     while (*sendPtr);
@@ -766,17 +744,17 @@ compilePtr buildByteCode(commandPtr cPtr, unitPtr uPtr)
     return (cmpStartPtr);
 }
 
-void compileCommand(devicePtr dPtr, unitPtr uPtr)
+void compileCommand(devicePtr dPtr)
 {
 
     if (!dPtr)
         return;
 
     if (dPtr->next)
-        compileCommand(dPtr->next, uPtr);
+        compileCommand(dPtr->next);
 
     logIT(LOG_INFO, "Expandiere Kommandos fuer Device %s", dPtr->id);
     expand(dPtr->cmdPtr, dPtr->protoPtr);
-    buildByteCode(dPtr->cmdPtr, uPtr);
+    buildByteCode(dPtr->cmdPtr);
 }
 

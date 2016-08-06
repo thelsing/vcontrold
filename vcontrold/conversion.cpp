@@ -226,97 +226,49 @@ size_t setSysTime(char* input, char* sendBuf, size_t bufsize)
     }
 }
 
-short bytes2Enum(enumPtr ptr, char* bytes, char** text, size_t len)
-{
-    enumPtr ePtr = NULL;
-    char string[200];
-
-    if (!len)
-        return 0;
-
-    /* suche die passende Enum und gebe den Wert zurueck */
-    if (!(ePtr = getEnumNode(ptr, bytes, len))) /* wir suchen nach dem Default */
-        ePtr = getDefaultEnumNode(ptr, bytes);
-
-    if (ePtr)
-    {
-        *text = ePtr->text;
-        bzero(string, sizeof(string));
-        char2hex(string, bytes, len);
-        strcat(string, " -> ");
-        strcat(string, ePtr->text);
-        logIT(LOG_INFO, "%s", string);
-        return 1;
-    }
-    else
-        return 0;
-}
-
-
-int getErrState(enumPtr ePtr, char* recv, size_t len, char* result)
-{
-    char* errtext;
-    char systime[35];
-    char string[300];
-    char* ptr;
-
-
-    if (len % 9)
-    {
-        sprintf(result, "Anzahl Bytes nicht mod 9");
-        return (0);
-    }
-
-    for (size_t i = 0; i < len; i += 9)
-    {
-        ptr = recv + i;
-        bzero(string, sizeof(string));
-        bzero(systime, sizeof(systime));
-
-        /* Fehlercode: Byte 0 */
-        if (bytes2Enum(ePtr, ptr, &errtext, 1))
-
-            /* Rest SysTime */
-            if (getSysTime(ptr + 1, 8, systime))
-            {
-                snprintf(string, sizeof(string), "%s %s (%02X)\n", systime, errtext, (unsigned char)*ptr);
-                strcat(result, string);
-                continue;
-            }
-
-        /* Formatfehler */
-        sprintf(result, "%s %s", errtext, systime);
-        return (0);
-    }
-
-    result[strlen(result) - 1] = '\0'; /* \n verdampfen */
-    return (1);
-}
+//int getErrState(enumPtr ePtr, char* recv, size_t len, char* result)
+//{
+//    char* errtext;
+//    char systime[35];
+//    char string[300];
+//    char* ptr;
+//
+//
+//    if (len % 9)
+//    {
+//        sprintf(result, "Anzahl Bytes nicht mod 9");
+//        return (0);
+//    }
+//
+//    for (size_t i = 0; i < len; i += 9)
+//    {
+//        ptr = recv + i;
+//        bzero(string, sizeof(string));
+//        bzero(systime, sizeof(systime));
+//
+//        /* Fehlercode: Byte 0 */
+//        if (bytes2Enum(ePtr, ptr, &errtext, 1))
+//
+//            /* Rest SysTime */
+//            if (getSysTime(ptr + 1, 8, systime))
+//            {
+//                snprintf(string, sizeof(string), "%s %s (%02X)\n", systime, errtext, (unsigned char)*ptr);
+//                strcat(result, string);
+//                continue;
+//            }
+//
+//        /* Formatfehler */
+//        sprintf(result, "%s %s", errtext, systime);
+//        return (0);
+//    }
+//
+//    result[strlen(result) - 1] = '\0'; /* \n verdampfen */
+//    return (1);
+//}
 
 
 
 
-size_t text2Enum(enumPtr ptr, char* text, char** bytes, size_t* len)
-{
-    enumPtr ePtr = NULL;
-    char string[200];
-    char string2[1000];
-
-    /* suche die passende Enum und gebe den Wert zurueck */
-    if (!(ePtr = getEnumNode(ptr, text, 0)))
-        return (0);
-
-    *bytes = ePtr->bytes;
-    *len = ePtr->len;
-    bzero(string, sizeof(string));
-    strncpy(string, text, sizeof(string));
-    strcat(string, " -> ");
-    bzero(string2, sizeof(string2));
-    char2hex(string2, ePtr->bytes, ePtr->len);
-    strcat(string, string2);
-    logIT(LOG_INFO, "%s", string);
-    return (*len);
-}
 
 template<typename T>
 void convert(commandPtr cmdPtr, T value, char* result)
@@ -415,7 +367,7 @@ void convert(commandPtr cmdPtr, char* byteArray, size_t length, char* result)
     }
 }
 
-void procGetUnit(commandPtr cmdPtr, unitPtr uPtr, char* recvBuf, size_t recvLen, char* result, char bitpos, char* pRecvPtr)
+void convertToString(commandPtr cmdPtr, char* recvBuf, size_t recvLen, char* result)
 {
     if (cmdPtr->parameter == Byte && recvLen == 1)
     {
@@ -471,39 +423,39 @@ void procGetUnit(commandPtr cmdPtr, unitPtr uPtr, char* recvBuf, size_t recvLen,
         return;
     }
 
-    if (strstr(uPtr->type, "cycletime") == uPtr->type)   /* Schaltzeit */
-    {
-        if (!getCycleTime(recvBuf, recvLen, result))
-            throw std::logic_error("error in conversioin");
-    }
-    else if (strstr(uPtr->type, "systime") == uPtr->type)   /* Systemzeit */
-    {
-        if (!getSysTime(recvBuf, recvLen, result))
-            throw std::logic_error("error in conversioin");
-    }
-    else if (strstr(uPtr->type, "errstate") == uPtr->type)   /* Errrocode + Systemzeit */
-    {
-        if (!getErrState(uPtr->ePtr, recvBuf, recvLen, result))
-            throw std::logic_error("error in conversioin");
-    }
-    else if (strstr(uPtr->type, "enum") == uPtr->type)   /*enum*/
-    {
-        char* tPtr;
+    //if (strstr(uPtr->type, "cycletime") == uPtr->type)   /* Schaltzeit */
+    //{
+    //    if (!getCycleTime(recvBuf, recvLen, result))
+    //        throw std::logic_error("error in conversioin");
+    //}
+    //else if (strstr(uPtr->type, "systime") == uPtr->type)   /* Systemzeit */
+    //{
+    //    if (!getSysTime(recvBuf, recvLen, result))
+    //        throw std::logic_error("error in conversioin");
+    //}
+    //else if (strstr(uPtr->type, "errstate") == uPtr->type)   /* Errrocode + Systemzeit */
+    //{
+    //    if (!getErrState(uPtr->ePtr, recvBuf, recvLen, result))
+    //        throw std::logic_error("error in conversioin");
+    //}
+    //else if (strstr(uPtr->type, "enum") == uPtr->type)   /*enum*/
+    //{
+    //    char* tPtr;
 
-        if (!bytes2Enum(uPtr->ePtr, recvBuf, &tPtr, recvLen))
-            throw std::logic_error("error in conversioin");
+    //    if (!bytes2Enum(uPtr->ePtr, recvBuf, &tPtr, recvLen))
+    //        throw std::logic_error("error in conversioin");
 
-        strcpy(result, tPtr);
-        return;
-    }
+    //    strcpy(result, tPtr);
+    //    return;
+    //}
 
-    logIT(LOG_ERR, "Unbekannter Typ %d", uPtr->type, uPtr->name);
+    /*logIT(LOG_ERR, "Unbekannter Typ %d", uPtr->type, uPtr->name);*/
     throw std::logic_error("error in conversioin");
     return;
 }
 
 
-int procSetUnit(unitPtr uPtr, char* sendBuf, size_t* sendLen, char bitpos, char* pRecvPtr)
+int convertBack(commandPtr cmdPtr, char* sendBuf, size_t* sendLen)
 {
     //char string[256];
     //char error[1000];

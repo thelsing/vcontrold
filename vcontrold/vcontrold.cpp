@@ -51,7 +51,6 @@ pthread_mutex_t config_mutex;
 
 /* in xmlconfig.c definiert */
 extern protocolPtr protoPtr;
-extern unitPtr uPtr;
 extern devicePtr devPtr;
 extern configPtr cfgPtr;
 
@@ -89,7 +88,7 @@ int reloadConfig()
 
     if (parseXMLFile(xmlfile))
     {
-        compileCommand(devPtr, uPtr);
+        compileCommand(devPtr);
         logIT(LOG_NOTICE, "XMLFile %s neu geladen", xmlfile);
         pthread_mutex_unlock(&config_mutex);
         return (1);
@@ -422,7 +421,7 @@ int interactive(int socketfd, char* device)
                 /* oder keine Unit definiert ist */
                 bzero(sendBuf, sizeof(sendBuf));
 
-                if ((noUnit | !cPtr->unit) && *para)
+                if (noUnit && *para)
                 {
                     if ((sendLen = string2chr(para, sendBuf, sizeof(sendBuf))) == 0)
                     {
@@ -491,7 +490,7 @@ int interactive(int socketfd, char* device)
                 {
                     logIT(LOG_INFO, "Fuehre Pre Kommando %s aus", cPtr->precmd);
 
-                    if (execByteCode(pcPtr, deviceFd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1, pcPtr->bit, pcPtr->retry, pRecvBuf, pcPtr->recvTimeout) == -1)
+                    if (execByteCode(pcPtr, deviceFd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1, pcPtr->retry, pRecvBuf, pcPtr->recvTimeout) == -1)
                     {
                         logIT(LOG_ERR, "Fehler beim ausfuehren von %s", readBuf);
                         sendErrMsg(socketfd);
@@ -514,7 +513,7 @@ int interactive(int socketfd, char* device)
                 	0 -> Formaterierter String
                 	n -> Bytes in Rohform */
 
-                count = execByteCode(cPtr, deviceFd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit, cPtr->bit, cPtr->retry, pRecvBuf, cPtr->recvTimeout);
+                count = execByteCode(cPtr, deviceFd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit, cPtr->retry, pRecvBuf, cPtr->recvTimeout);
 
                 if (count == -1)
                 {
@@ -600,75 +599,11 @@ int interactive(int socketfd, char* device)
                         Writen(socketfd, string, strlen(string));
                     }
 
-                    /* Ist Bit definiert ?*/
-                    if (cPtr->bit > 0)
-                    {
-                        snprintf(string, sizeof(string), "\tBit (BP): %d\n", cPtr->bit);
-                        Writen(socketfd, string, strlen(string));
-                    }
-
                     /* Pre-Command definiert ?*/
                     if (cPtr->precmd)
                     {
                         snprintf(string, sizeof(string), "\tPre-Kommando (P0-P9): %s\n", cPtr->precmd);
                         Writen(socketfd, string, strlen(string));
-                    }
-
-                    /* Falls eine Unit verwendet wurde, geben wir das auch noch aus */
-                    compilePtr cmpPtr;
-                    cmpPtr = cPtr->cmpPtr;
-
-                    while (cmpPtr)
-                    {
-                        if (cmpPtr && cmpPtr->uPtr)   /* Unit gefunden */
-                        {
-                            char* gcalc;
-                            char* scalc;
-
-                            /* wir unterscheiden die Rechnerei nach get und setaddr */
-                            if (cmpPtr->uPtr->gCalc && *cmpPtr->uPtr->gCalc)
-                                gcalc = cmpPtr->uPtr->gCalc;
-                            else
-                                gcalc = cmpPtr->uPtr->gICalc;
-
-                            if (cmpPtr->uPtr->sCalc && *cmpPtr->uPtr->sCalc)
-                                scalc = cmpPtr->uPtr->sCalc;
-                            else
-                                scalc = cmpPtr->uPtr->sICalc;
-
-                            snprintf(string, sizeof(string), "\tUnit: %s (%s)\n\t  Type: %s\n\t  Get-Calc: %s\n\t  Set-Calc: %s\n\t Einheit: %s\n",
-                                     cmpPtr->uPtr->name, cmpPtr->uPtr->abbrev,
-                                     cmpPtr->uPtr->type,
-                                     gcalc,
-                                     scalc,
-                                     cmpPtr->uPtr->entity);
-                            Writen(socketfd, string, strlen(string));
-
-                            /* falls es sich um ein enum handelt, gibts noch mehr */
-                            /* oder sonstwo enums definiert sind */
-                            if (cmpPtr->uPtr->ePtr)
-                            {
-                                enumPtr ePtr;
-                                ePtr = cmpPtr->uPtr->ePtr;
-                                char dummy[20];
-
-                                while (ePtr)
-                                {
-                                    bzero(dummy, sizeof(dummy));
-
-                                    if (!ePtr->bytes)
-                                        strcpy(dummy, "<default>");
-                                    else
-                                        char2hex(dummy, ePtr->bytes, ePtr->len);
-
-                                    snprintf(string, sizeof(string), "\t  Enum Bytes:%s Text:%s\n", dummy, ePtr->text);
-                                    Writen(socketfd, string, strlen(string));
-                                    ePtr = ePtr->next;
-                                }
-                            }
-                        }
-
-                        cmpPtr = cmpPtr->next;
                     }
                 }
                 else
@@ -922,7 +857,7 @@ int main(int argc, char* argv[])
     }
 
     /* die Macros werden ersetzt und die zu sendenden Strings in Bytecode gewandelt */
-    compileCommand(devPtr, uPtr);
+    compileCommand(devPtr);
 
     int fd = 0;
     char result[MAXBUF];

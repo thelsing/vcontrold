@@ -73,7 +73,7 @@
     <ClCompile Include="io.cpp" />
     <ClCompile Include="parser.cpp" />
     <ClCompile Include="socket.cpp" />
-    <ClCompile Include="unit.cpp" />
+    <ClCompile Include="conversion.cpp" />
     <ClCompile Include="vcontrold.cpp" />
     <ClCompile Include="xmlconfig.cpp" />
   </ItemGroup>
@@ -83,7 +83,7 @@
     <ClInclude Include="io.h" />
     <ClInclude Include="parser.h" />
     <ClInclude Include="socket.h" />
-    <ClInclude Include="unit.h" />
+    <ClInclude Include="conversion.h" />
     <ClInclude Include="xmlconfig.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
