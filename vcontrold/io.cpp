@@ -128,7 +128,6 @@ int opentty(char* device)
 
 int my_send(int fd, char* s_buf, size_t len)
 {
-    int i;
     char string[256];
 
     /* Buffer leeren */
@@ -231,7 +230,7 @@ static int setblock(int fd)
 #endif
 }
 
-static char* dump(char* dest, char* title, char* buf, size_t len)
+static char* dump(char* dest, const char* title, char* buf, size_t len)
 {
     int pos = 0;
     size_t i;

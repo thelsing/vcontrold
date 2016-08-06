@@ -424,7 +424,7 @@ int interactive(int socketfd, char* device)
 
                 if ((noUnit | !cPtr->unit) && *para)
                 {
-                    if ((sendLen = string2chr(para, sendBuf, sizeof(sendBuf))) == -1)
+                    if ((sendLen = string2chr(para, sendBuf, sizeof(sendBuf))) == 0)
                     {
                         logIT(LOG_ERR, "Kein Hex string: %s", para);
                         sendErrMsg(socketfd);

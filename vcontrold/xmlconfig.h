@@ -38,7 +38,7 @@ typedef struct compile
 {
     int token;
     char* send;
-    int len;
+    size_t len;
     unitPtr uPtr;
     char* errStr;
     compilePtr next;
@@ -109,6 +109,22 @@ enum Parameter
 enum Conversion
 {
     NoConversion,
+    Div10,
+    Sec2Hour,
+    DateBCD,
+    HexBytes2AsciiByte,
+    HeyByte2UTF16Byte,
+    Mult100,
+    LastBurnerCheck,
+    LastCheckInterval,
+    RotateBytes,
+    Mult10,
+    Mult2,
+    Div100,
+    Div2,
+    DateTimeBCD,
+    Mult5,
+    MultOffset,
 };
 
 typedef struct command
@@ -123,11 +139,13 @@ typedef struct command
     char* precmd;
     Parameter parameter;
     Conversion conversion;
+    double conversionFactor;
+    double conversionOffset;
     size_t blockLength;
     size_t bytePosition;
     size_t byteLength;
-    size_t bitPosition;
-    size_t bitLength;
+    char bitPosition;
+    char bitLength;
     int retry;
     unsigned short recvTimeout;
     char bit;

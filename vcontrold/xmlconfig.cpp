@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <stdexcept>
+#include <string>
 #include <string>
 #include <syslog.h>
 #include <libxml/parser.h>
@@ -210,7 +212,8 @@ commandPtr newCommandNode(commandPtr ptr)
     if (ptr && ptr->next)
         return (newCommandNode(ptr->next));
 
-    nptr = (commandPtr) calloc(1, sizeof(Command));
+    nptr = (commandPtr) malloc(sizeof(Command));
+    memset(nptr, 0, sizeof(Command));
 
     if (!nptr)
     {
@@ -221,10 +224,6 @@ commandPtr newCommandNode(commandPtr ptr)
     if (ptr)
         ptr->next = nptr;
 
-    nptr->next = NULL;
-    nptr->cmpPtr = NULL;
-    nptr->bit = 0;
-    nptr->bytePosition = 0;
     return nptr;
 }
 
@@ -975,7 +974,55 @@ Conversion parseConversionEnum(const std::string tagContent)
     if (tagContent == "NoConversion")
         return NoConversion;
 
-    return NoConversion;
+    if (tagContent == "Div10")
+        return Div10;
+
+    if (tagContent == "Sec2Hour")
+        return Sec2Hour;
+
+    if (tagContent == "DateBCD")
+        return DateBCD;
+
+    if (tagContent == "HexBytes2AsciiByte")
+        return HexBytes2AsciiByte;
+
+    if (tagContent == "HeyByte2UTF16Byte")
+        return HeyByte2UTF16Byte;
+
+    if (tagContent == "Mult100")
+        return Mult100;
+
+    if (tagContent == "LastBurnerCheck")
+        return LastBurnerCheck;
+
+    if (tagContent == "LastCheckInterval")
+        return LastCheckInterval;
+
+    if (tagContent == "RotateBytes")
+        return RotateBytes;
+
+    if (tagContent == "Mult10")
+        return Mult10;
+
+    if (tagContent == "Mult2")
+        return Mult2;
+
+    if (tagContent == "Div100")
+        return Div100;
+
+    if (tagContent == "Div2")
+        return Div2;
+
+    if (tagContent == "DateTimeBCD")
+        return DateTimeBCD;
+
+    if (tagContent == "Mult5")
+        return Mult5;
+
+    if (tagContent == "MultOffset")
+        return MultOffset;
+
+    throw std::logic_error(std::string("conversion not found: ") + std::string(tagContent));
 }
 
 Parameter parseParameterEnum(const std::string tagContent)
@@ -1000,6 +1047,7 @@ Parameter parseParameterEnum(const std::string tagContent)
 
     return Array;
 }
+
 
 commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
 {
@@ -1107,7 +1155,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
 
             if (chrPtr)
-                cPtr->bitPosition = atoi(chrPtr);
+                cPtr->bitPosition = (char)atoi(chrPtr);
             else
                 cPtr->bitPosition = 0;
         }
@@ -1117,7 +1165,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
 
             if (chrPtr)
-                cPtr->bitLength = atoi(chrPtr);
+                cPtr->bitLength = (char)atoi(chrPtr);
             else
                 cPtr->bitLength = 0;
         }
@@ -1140,6 +1188,26 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
                 cPtr-> conversion = parseConversionEnum(chrPtr);
             else
                 cPtr->conversion = NoConversion;
+        }
+        else if (commandFound && strstr((char*)cur->name, "conversionFactor"))
+        {
+            chrPtr = getTextNode(cur);
+            logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
+
+            if (chrPtr)
+                cPtr->conversionFactor = atoi(chrPtr);
+            else
+                cPtr->conversionFactor = 0;
+        }
+        else if (commandFound && strstr((char*)cur->name, "conversionOffset"))
+        {
+            chrPtr = getTextNode(cur);
+            logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
+
+            if (chrPtr)
+                cPtr->conversionOffset = atoi(chrPtr);
+            else
+                cPtr->conversionOffset = 0;
         }
         else if (commandFound && strstr((char*)cur->name, "error"))
         {
@@ -1684,7 +1752,7 @@ int parseXMLFile(const char* filename)
                 cPtr->bitLength = 1;
 
             if (cPtr->bitPosition + cPtr->bitLength > 8)
-                cPtr->bitLength = 8 - cPtr->bitPosition;
+                cPtr->bitLength = (char)(8 - cPtr->bitPosition);
 
             cPtr->byteLength = 1;
         }

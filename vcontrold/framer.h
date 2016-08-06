@@ -18,7 +18,7 @@
 #define FRAMER_ERROR	0
 #define FRAMER_SUCCESS	1
 
-int framer_send(int fd, char* s_buf, char len);
+int framer_send(int fd, char* s_buf, size_t len);
 
 int framer_waitfor(int fd, char* w_buf, int w_len);
 

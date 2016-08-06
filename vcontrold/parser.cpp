@@ -258,7 +258,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                     }
 
                     etime = 0;
-                    bzero(recvBuf, sizeof(recvBuf));
+                    bzero(recvBuf, recvLen);
 
                     if (framer_receive(fd, recvBuf, cmpPtr->len, &etime) <= 0)
                     {
@@ -316,11 +316,11 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                             char mask = 0;
 
                             for (char i = cmdPtr->bitPosition; i < (cmdPtr->bitPosition + cmdPtr->bitLength); i++)
-                                mask |= 1 << (7 - i % 8);
+                                mask |= (char)(1 << (7 - i % 8));
 
                             *dataBuf &= mask;
-
-                            *dataBuf >>= (8 - cmdPtr->bitPosition - cmdPtr->bitLength);
+                            char shiftLength = (char)(8 - cmdPtr->bitPosition - cmdPtr->bitLength);
+                            *dataBuf = (char)(*dataBuf >> shiftLength);
                         }
 
                         procGetUnit(cmdPtr, cmpPtr->uPtr, dataBuf.get(), cmdPtr->byteLength, result, bitpos, pRecvPtr);
@@ -536,7 +536,7 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
     char* ptr, *bptr;
     macroPtr mFPtr;
     char string[256];
-    char* sendPtr, *sendStartPtr;
+    char* sendPtr;
     char* tmpPtr;
 
     icmdPtr iPtr;
@@ -551,7 +551,6 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
 
     /*	2. Parse die zeile und ersetze die Variablen durch Werte in cPtr */
     sendPtr = iPtr->send;
-    sendStartPtr = iPtr->send;
 
     if (!sendPtr)
         return (0);
@@ -592,10 +591,9 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
             if (strstr(var, "addr") == var)
             {
                 /* immer zwei Byte zusammen */
-                int i;
                 bzero(string, sizeof(string));
 
-                for (i = 0; i < strlen(cPtr->addr) - 1; i += 2)
+                for (size_t i = 0; i < strlen(cPtr->addr) - 1; i += 2)
                 {
                     strncpy(ePtr, cPtr->addr + i, 2);
                     ePtr += 2;
@@ -642,7 +640,6 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
     /*	3. Expandiere die Zeile dann wie gehabt */
 
     sendPtr = tmpPtr;
-    sendStartPtr = sendPtr;
 
     /* wir suchen nach woertern und schauen, ob es die als Macros gibt */
 

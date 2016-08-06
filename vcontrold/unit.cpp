@@ -1,8 +1,6 @@
-/* unit.c, Umrechnung von Einheiten */
-/* $Id$ */
-
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstdio>
+#include <cmath>
 #include <errno.h>
 #include <signal.h>
 #include <syslog.h>
@@ -25,7 +23,6 @@
 
 #include "xmlconfig.h"
 #include "common.h"
-#include "arithmetic.h"
 
 /* brauchen wir  bei procSet... */
 #define FLOAT 1
@@ -330,6 +327,88 @@ void convert(commandPtr cmdPtr, T value, char* result)
             sprintf(result, "%d", value);
             break;
 
+        case Div2:
+            sprintf(result, "%f", value / 2.0);
+
+            break;
+
+        case Div10:
+            sprintf(result, "%f", value / 10.0);
+
+            break;
+
+        case Div100:
+            sprintf(result, "%f", value / 100.0);
+
+            break;
+
+        case Mult2:
+            sprintf(result, "%d", value * 2);
+
+            break;
+
+        case Mult5:
+            sprintf(result, "%d", value * 5);
+
+            break;
+
+        case Mult10:
+            sprintf(result, "%d", value * 10);
+
+            break;
+
+        case Mult100:
+            sprintf(result, "%d", value * 100);
+
+            break;
+
+        case MultOffset:
+            sprintf(result, "%d", value * cmdPtr->conversionFactor + cmdPtr->conversionOffset);
+
+            break;
+
+        case Sec2Hour:
+            sprintf(result, "%f", round((value / 3600.0) * 100) / 100);
+
+            break;
+
+        default:
+            throw std::logic_error("no conversion found!");
+            break;
+    }
+}
+
+void convert(commandPtr cmdPtr, char* byteArray, size_t length, char* result)
+{
+    switch (cmdPtr->conversion)
+    {
+        case NoConversion:
+            char2hex(result, byteArray, length);
+            break;
+
+        case DateBCD:
+        case DateTimeBCD:
+            if (length >= 8)
+            {
+                char* ba = byteArray;
+                sprintf(result, "%2x.%2x.%2x%2x %2x:%2x:%2x", ba[3], ba[2], ba[0], ba[1], ba[5], ba[6], ba[7]);
+            }
+
+            break;
+
+        case HexBytes2AsciiByte:
+        case HeyByte2UTF16Byte:
+            strncpy(result, byteArray, length);
+            result[length] = 0;
+            break;
+
+        case RotateBytes:
+            for (int i = length - 1; i >= 0; i--)
+                result[i] = byteArray[length - i - 1];
+
+            result[length] = 0;
+            break;
+
         default:
             throw std::logic_error("no conversion found!");
             break;
@@ -387,7 +466,10 @@ void procGetUnit(commandPtr cmdPtr, unitPtr uPtr, char* recvBuf, size_t recvLen,
         return;
     }
     else if (cmdPtr->parameter == Array)
-        throw std::logic_error("Array not implemented yet");
+    {
+        convert(cmdPtr, recvBuf, recvLen, result);
+        return;
+    }
 
     if (strstr(uPtr->type, "cycletime") == uPtr->type)   /* Schaltzeit */
     {

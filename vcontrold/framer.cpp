@@ -116,7 +116,7 @@ static int framer_check_actaddr(void* pdu)
 //TODO: could cause trouble on addr containing 0xFE
 static void framer_set_result(char result)
 {
-    framer_current_addr = FRAMER_LINK_STATUS(result);
+    framer_current_addr = (uint16) FRAMER_LINK_STATUS(result);
 }
 
 static int framer_preset_result(char* r_buf, int r_len, unsigned long* petime)
@@ -260,7 +260,7 @@ static int framer_open_p300(int fd)
  */
 static char framer_chksum(char* buf, int len)
 {
-    char sum = 0;
+    int sum = 0;
 
     while (len)
     {
@@ -271,7 +271,7 @@ static char framer_chksum(char* buf, int len)
     }
 
     //printf("framer chksum %02x\n", sum);
-    return sum;
+    return (char)sum % 256;
 }
 /*
  * Frame a message in case P300 protocol is indicated
@@ -287,7 +287,7 @@ static char framer_chksum(char* buf, int len)
  * | LEADIN | payload len | type | function | addr | exp len | chk |
  */
 
-int framer_send(int fd, char* s_buf, char len)
+int framer_send(int fd, char* s_buf, size_t len)
 {
     char string[256];
 
@@ -308,13 +308,13 @@ int framer_send(int fd, char* s_buf, char len)
     }
     else
     {
-        int pos = 0;
+        size_t pos = 0;
         char l_buf[256];
         unsigned long etime;
         int rlen;
 
         l_buf[0] = P300_LEADIN;
-        l_buf[1] = len; // only payload but len contains other bytes
+        l_buf[1] = (char)len; // only payload but len contains other bytes
         l_buf[2] = s_buf[0]; // type
         l_buf[3] = s_buf[1]; // function
 
