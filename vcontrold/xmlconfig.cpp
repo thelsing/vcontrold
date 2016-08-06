@@ -807,7 +807,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
                 continue;
             }
         }
-        else if (commandFound && strstr((char*)cur->name, "addr"))
+        else if (commandFound && (strcmp((char*)cur->name, "addr") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -820,7 +820,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 nullIT(&cPtr->addr);
         }
-        else if (commandFound && strstr((char*)cur->name, "bytePosition"))
+        else if (commandFound && (strcmp((char*)cur->name, "bytePosition") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -830,7 +830,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 cPtr->bytePosition = 0;
         }
-        else if (commandFound && strstr((char*)cur->name, "byteLength"))
+        else if (commandFound && (strcmp((char*)cur->name, "byteLength") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -840,7 +840,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 cPtr->byteLength = 0;
         }
-        else if (commandFound && strstr((char*)cur->name, "bitPosition"))
+        else if (commandFound && (strcmp((char*)cur->name, "bitPosition") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -850,7 +850,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 cPtr->bitPosition = 0;
         }
-        else if (commandFound && strstr((char*)cur->name, "bitLength"))
+        else if (commandFound && (strcmp((char*)cur->name, "bitLength") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -860,7 +860,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 cPtr->bitLength = 0;
         }
-        else if (commandFound && strstr((char*)cur->name, "parameter"))
+        else if (commandFound && (strcmp((char*)cur->name, "parameter") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -870,7 +870,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 cPtr->parameter = Array;
         }
-        else if (commandFound && strstr((char*)cur->name, "conversion"))
+        else if (commandFound && (strcmp((char*)cur->name, "conversion") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -880,7 +880,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 cPtr->conversion = NoConversion;
         }
-        else if (commandFound && strstr((char*)cur->name, "conversionFactor"))
+        else if (commandFound && (strcmp((char*)cur->name, "conversionFactor") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -890,7 +890,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 cPtr->conversionFactor = 0;
         }
-        else if (commandFound && strstr((char*)cur->name, "conversionOffset"))
+        else if (commandFound && (strcmp((char*)cur->name, "conversionOffset") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -900,7 +900,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 cPtr->conversionOffset = 0;
         }
-        else if (commandFound && strstr((char*)cur->name, "error"))
+        else if (commandFound && (strcmp((char*)cur->name, "error") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -933,7 +933,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 nullIT(&cPtr->precmd);
         }
-        else if (commandFound && strstr((char*)cur->name, "description"))
+        else if (commandFound && (strcmp((char*)cur->name, "description") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -946,7 +946,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 nullIT(&cPtr->description);
         }
-        else if (commandFound && strstr((char*)cur->name, "shortDescription"))
+        else if (commandFound && (strcmp((char*)cur->name, "shortDescription") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
@@ -959,7 +959,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 nullIT(&cPtr->shortDescription);
         }
-        else if (commandFound && strstr((char*)cur->name, "blockLength"))
+        else if (commandFound && (strcmp((char*)cur->name, "blockLength") == 0))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);

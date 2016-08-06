@@ -356,7 +356,7 @@ int framer_send(int fd, char* s_buf, size_t len)
 
         framer_set_actaddr(l_buf);
         snprintf(string, sizeof(string), ">FRAMER: Command send");
-        logIT(LOG_ERR, string);
+        logIT(LOG_DEBUG, string);
         return FRAMER_SUCCESS;
 
     }

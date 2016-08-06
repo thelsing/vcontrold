@@ -343,7 +343,7 @@ void convert(commandPtr cmdPtr, char* byteArray, size_t length, char* result)
             if (length >= 8)
             {
                 char* ba = byteArray;
-                sprintf(result, "%2x.%2x.%2x%2x %2x:%2x:%2x", ba[3], ba[2], ba[0], ba[1], ba[5], ba[6], ba[7]);
+                sprintf(result, "%02x.%02x.%02x%02x %02x:%02x:%02x", ba[3], ba[2], ba[0], ba[1], ba[5], ba[6], ba[7]);
             }
 
             break;
