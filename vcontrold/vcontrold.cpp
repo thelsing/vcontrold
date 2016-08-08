@@ -15,6 +15,7 @@
 #include <getopt.h>
 #include <pthread.h>
 #include <stdexcept>
+#include <yaml-cpp/yaml.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -357,7 +358,7 @@ void printCommandDetails(char* readBuf, int socketfd)
     pthread_mutex_unlock(&config_mutex);
 }
 
-commandPtr findCommand(char* cmd)
+commandPtr findCommand(const char* cmd)
 {
     commandPtr cPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cmd);
 
@@ -367,7 +368,7 @@ commandPtr findCommand(char* cmd)
     return 0;
 }
 
-std::string runCommand(commandPtr cPtr, char* para, short noUnit, char* device)
+std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const char* device)
 {
     std::string result("");
 
@@ -396,7 +397,7 @@ std::string runCommand(commandPtr cPtr, char* para, short noUnit, char* device)
 
     if (noUnit && para && *para)
     {
-        if ((sendLen = string2chr(para, sendBuf, sizeof(sendBuf))) == 0)
+        if ((sendLen = string2chr((char*)para, sendBuf, sizeof(sendBuf))) == 0)
         {
             logIT(LOG_ERR, "Kein Hex string: %s", para);
 
@@ -501,6 +502,29 @@ std::string runCommand(commandPtr cPtr, char* para, short noUnit, char* device)
     return result;
 }
 
+std::string bulkExec(char* para, short noUnit, char* device)
+{
+    YAML::Node commands = YAML::Load(para);
+
+    for (YAML::const_iterator it = commands.begin(); it != commands.end(); ++it)
+    {
+        std::string cmd = it->first.as<std::string>();
+        std::string para = it->second.as<std::string>();
+
+        commandPtr cptr = findCommand(cmd.c_str());
+
+        if (!cptr)
+            continue;
+
+        commands[cmd] = runCommand(cptr, para.c_str(), noUnit, device);
+    }
+
+    YAML::Emitter out;
+    out << commands;
+    std::string result(out.c_str());
+    return result;
+}
+
 int interactive(int socketfd, char* device)
 {
     char readBuf[1000];
@@ -554,14 +578,14 @@ int interactive(int socketfd, char* device)
                 else
                     setDebugFD(-1);
             }
-            else if (strcmp(readBuf, "unit") == 0)
+            else if (strcmp(cmd, "unit") == 0)
             {
                 if (strcmp(para, "off") == 0)
                     noUnit = 1;
                 else
                     noUnit = 0;
             }
-            else if (strcmp(readBuf, "reload") == 0)
+            else if (strcmp(cmd, "reload") == 0)
             {
                 if (reloadConfig())
                     snprintf(string, sizeof(string), "XMLFile %s neu geladen\n", xmlfile);
@@ -570,27 +594,32 @@ int interactive(int socketfd, char* device)
 
                 Writen(socketfd, string, strlen(string));
             }
-            else if (strcmp(readBuf, "raw") == 0)
+            else if (strcmp(cmd, "raw") == 0)
                 rawModus(socketfd, device);
-            else if (strcmp(readBuf, "commands") == 0)
+            else if (strcmp(cmd, "commands") == 0)
                 printCommands(socketfd);
 
-            else if (strcmp(readBuf, "protocol") == 0)
+            else if (strcmp(cmd, "protocol") == 0)
             {
                 snprintf(string, sizeof(string), "%s\n", cfgPtr->devPtr->protoPtr->name);
                 Writen(socketfd, string, strlen(string));
             }
-            else if (strcmp(readBuf, "device") == 0)
+            else if (strcmp(cmd, "device") == 0)
             {
                 snprintf(string, sizeof(string), "%s (ID=%s) (Protocol=%s)\n", cfgPtr->devPtr->name,
                          cfgPtr->devPtr->id,
                          cfgPtr->devPtr->protoPtr->name);
                 Writen(socketfd, string, strlen(string));
             }
-            else if (strcmp(readBuf, "version") == 0)
+            else if (strcmp(cmd, "version") == 0)
             {
                 snprintf(string, sizeof(string), "Version: %s\n", VERSION_DAEMON);
                 Writen(socketfd, string, strlen(string));
+            }
+            else if (strcmp(cmd, "bulkexec") == 0)
+            {
+                std::string result = bulkExec(para, noUnit, device) + "\n";
+                Writen(socketfd, (void*)result.c_str(), result.length());
             }
             else if (commandPtr cptr = findCommand(cmd))
             {

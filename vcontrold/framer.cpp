@@ -585,7 +585,7 @@ int framer_waitfor(int fd, char* w_buf, int w_len)
  * Device handling,
  * with open and close the mode is also switched to P300/back
  */
-int framer_openDevice(char* device, char pid)
+int framer_openDevice(const char* device, char pid)
 {
     char string[100];
     int fd;
@@ -593,7 +593,7 @@ int framer_openDevice(char* device, char pid)
     snprintf(string, sizeof(string), ">FRAMER: open device %s ProtocolID %02X", device, pid);
     logIT(LOG_INFO, string);
 
-    if ((fd = openDevice(device)) == -1)
+    if ((fd = openDevice((char*)device)) == -1)
         return -1;
 
     if (pid == P300_LEADIN)

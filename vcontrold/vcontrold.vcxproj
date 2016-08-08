@@ -66,6 +66,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
     <IncludePath>/usr/include/libxml2;H:\linuxincludes;H:\linuxincludes\libxml2;H:\linuxincludes\arm-linux-gnueabihf;$(IncludePath)</IncludePath>
+    <TargetExt />
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="common.cpp" />
@@ -94,12 +95,12 @@
       <CppLanguageStandard>gnu++11</CppLanguageStandard>
     </ClCompile>
     <Link>
-      <LibraryDependencies>xml2;pthread</LibraryDependencies>
+      <LibraryDependencies>xml2;pthread;yaml-cpp</LibraryDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
     <Link>
-      <LibraryDependencies>xml2;pthread</LibraryDependencies>
+      <LibraryDependencies>xml2;pthread;yaml-cpp</LibraryDependencies>
     </Link>
     <ClCompile>
       <CLanguageStandard>Default</CLanguageStandard>

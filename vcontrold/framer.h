@@ -24,7 +24,7 @@ int framer_waitfor(int fd, char* w_buf, int w_len);
 
 int framer_receive(int fd, char* r_buf, int r_len, unsigned long* petime);
 
-int framer_openDevice(char* device, char pid);
+int framer_openDevice(const char* device, char pid);
 
 void framer_closeDevice(int fd);
 
