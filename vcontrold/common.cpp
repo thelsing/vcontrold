@@ -136,14 +136,9 @@ void sendErrMsg(int fd)
         snprintf(string, sizeof(string), "ERR: %s", errMsg);
         write(fd, string, strlen(string));
         errClass = 99; /* damit wird sie nur ein mal angezeigt */
-        bzero(errMsg, sizeof(errMsg));
     }
 
     *errMsg = '\0';
-    /* zurück auf Anfang, egal, ob wirklich ausgegeben -
-     * kann für debugging auskommentiert werden, dann
-     * sammeln sich in errMsg die Fehler
-     */
 }
 
 void setDebugFD(int fd)

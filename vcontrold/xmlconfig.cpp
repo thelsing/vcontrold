@@ -414,11 +414,11 @@ configPtr parseConfig(xmlNodePtr cur)
     int serialFound = 0;
     int netFound = 0;
     int logFound = 0;
-    configPtr cfgPtr;
-    char* chrPtr;
-    xmlNodePtr prevPtr;
+    configPtr cfgPtr = 0;
+    char* chrPtr = 0;
+    xmlNodePtr prevPtr = 0;
     //char string[256];
-    allowPtr aPtr;
+    allowPtr aPtr = 0;
     char ip[16];
 
     cfgPtr = (configPtr)calloc(1, sizeof(Config));
@@ -594,7 +594,7 @@ configPtr parseConfig(xmlNodePtr cur)
 
 macroPtr parseMacro(xmlNodePtr cur)
 {
-    macroPtr mPtr;
+    macroPtr mPtr = 0;
     macroPtr mStartPtr = NULL;
     char* macro;
     char* chrPtr;
@@ -982,12 +982,12 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
 
 icmdPtr parseICmd(xmlNodePtr cur)
 {
-    icmdPtr icPtr;
-    icmdPtr icStartPtr = NULL;
-    char* command;
-    char* chrPtr;
+    icmdPtr icPtr = 0;
+    icmdPtr icStartPtr = 0;
+    char* command = 0;
+    char* chrPtr = 0;
     int commandFound = 0;
-    xmlNodePtr prevPtr;
+    xmlNodePtr prevPtr = 0;
 
     while (cur)
     {

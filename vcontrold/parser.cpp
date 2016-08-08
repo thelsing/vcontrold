@@ -142,8 +142,7 @@ int parseLine(char* line, char* hex, int* hexlen, char* uSPtr, ssize_t uSPtrLen)
 }
 
 int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
-                 char* sendBuf, size_t sendLen, short supressUnit,
-                 int retry, char* pRecvPtr, unsigned short recvTimeout)
+                 char* sendBuf, size_t sendLen, short supressUnit)
 {
 
     compilePtr cmpPtr = cmdPtr->cmpPtr;
@@ -156,8 +155,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
     unsigned long etime;
     char out_buff[1024];
     int _len = 0;
-    /* 	struct timespec t_sLeep; */
-    /* 	struct timespec t_sleep_rem; */
+    int retry = cmdPtr->retry;
 
     bzero(simIn, sizeof(simIn));
     bzero(simOut, sizeof(simOut));
@@ -262,9 +260,9 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
 
                     /* falls wir beim empfangen laenger als der Timeout gebraucht haben gehts in die
                     naechste Rune */
-                    if (recvTimeout && (etime > recvTimeout))
+                    if (cmdPtr->recvTimeout && (etime > cmdPtr->recvTimeout))
                     {
-                        logIT(LOG_NOTICE, "Recv Timeout: %ld ms  > %d ms (Retry: %d)", etime, recvTimeout, (int)(retry - 1));
+                        logIT(LOG_NOTICE, "Recv Timeout: %ld ms  > %d ms (Retry: %d)", etime, cmdPtr->recvTimeout, (int)(retry - 1));
 
                         if (retry <= 1)
                         {
@@ -395,7 +393,7 @@ RETRY:
         retry--;
         cmpPtr = cPtr; /* von vorne bitte */
     }
-    while ((cmpPtr->errStr || recvTimeout) && (retry > 0));
+    while ((cmpPtr->errStr || cmdPtr->recvTimeout) && (retry > 0));
 
     return (0);
 }

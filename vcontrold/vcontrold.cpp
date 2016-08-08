@@ -272,393 +272,351 @@ int rawModus(int socketfd, char* device)
     return 0;			// is this correct?
 }
 
+void printCommands(int socketfd)
+{
+    char string[256] = "";
+    pthread_mutex_lock(&config_mutex);
+    commandPtr cPtr = cfgPtr->devPtr->cmdPtr;
+
+    while (cPtr)
+    {
+        if (cPtr->addr)
+        {
+            snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->description);
+            Writen(socketfd, string, strlen(string));
+        }
+
+        cPtr = cPtr->next;
+    }
+
+    pthread_mutex_unlock(&config_mutex);
+}
+
+void printCommandDetails(char* readBuf, int socketfd)
+{
+    char string[256];
+    char* readPtr = readBuf + strlen("detail");
+
+    while (isspace(*readPtr))
+        readPtr++;
+
+    try
+    {
+        pthread_mutex_lock(&config_mutex);
+        commandPtr cPtr;
+
+        /* Ist das Kommando in der XML definiert ? */
+        if (readPtr && (cPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, readPtr)))
+        {
+            bzero(string, sizeof(string));
+            snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->send);
+            Writen(socketfd, string, strlen(string));
+            /* Error String definiert */
+            char buf[MAXBUF];
+            bzero(buf, sizeof(buf));
+
+            if (cPtr->errStr && char2hex(buf, cPtr->errStr, cPtr->blockLength))
+            {
+                snprintf(string, sizeof(string), "\tError bei (Hex): %s", buf);
+                Writen(socketfd, string, strlen(string));
+            }
+
+            /* recvTimeout ?*/
+            if (cPtr->recvTimeout)
+            {
+                snprintf(string, sizeof(string), "\tRECV Timeout: %d ms\n", cPtr->recvTimeout);
+                Writen(socketfd, string, strlen(string));
+            }
+
+            /* Retry definiert ? */
+            if (cPtr->retry)
+            {
+                snprintf(string, sizeof(string), "\tRetry: %d\n", cPtr->retry);
+                Writen(socketfd, string, strlen(string));
+            }
+
+            /* Pre-Command definiert ?*/
+            if (cPtr->precmd)
+            {
+                snprintf(string, sizeof(string), "\tPre-Kommando (P0-P9): %s\n", cPtr->precmd);
+                Writen(socketfd, string, strlen(string));
+            }
+        }
+        else
+        {
+            bzero(string, sizeof(string));
+            snprintf(string, sizeof(string), "ERR: command %s unbekannt\n", readPtr);
+            Writen(socketfd, string, strlen(string));
+        }
+    }
+    catch (std::exception& e)
+    {
+        logIT(LOG_ERR, "%s", e.what());
+    }
+
+    pthread_mutex_unlock(&config_mutex);
+}
+
+commandPtr findCommand(char* cmd)
+{
+    commandPtr cPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cmd);
+
+    if (cPtr && cPtr->addr)
+        return cPtr;
+
+    return 0;
+}
+
+std::string runCommand(commandPtr cPtr, char* para, short noUnit, char* device)
+{
+    std::string result("");
+
+    char buffer[MAXBUF];
+    size_t sendLen = 0;
+
+
+    char recvBuf[MAXBUF];
+    char pRecvBuf[MAXBUF];
+    char sendBuf[MAXBUF];
+    int count = 0;
+
+    commandPtr pcPtr;
+    char string[256] = "";
+    static int deviceFd = -1;
+
+    bzero(string, sizeof(string));
+    bzero(recvBuf, sizeof(recvBuf));
+    bzero(sendBuf, sizeof(sendBuf));
+    bzero(pRecvBuf, sizeof(pRecvBuf));
+
+
+    /* Falls Unit Off wandeln wir die uebergebenen Parameter in Hex */
+    /* oder keine Unit definiert ist */
+    bzero(sendBuf, sizeof(sendBuf));
+
+    if (noUnit && para && *para)
+    {
+        if ((sendLen = string2chr(para, sendBuf, sizeof(sendBuf))) == 0)
+        {
+            logIT(LOG_ERR, "Kein Hex string: %s", para);
+
+            return result;
+        }
+
+        /* falls sendLen > als len der Befehls, nehmen wir len */
+        if (sendLen > cPtr->blockLength)
+        {
+            logIT(LOG_WARNING, "Laenge des Hex Strings > Sendelaenge des Befehls, sende nur %d Byte", cPtr->blockLength);
+            sendLen = cPtr->blockLength;
+        }
+    }
+    else if (para && *para)   /* wir kopieren die Parameter, darum kuemert sich execbyteCode selbst */
+    {
+        strcpy(sendBuf, para);
+        sendLen = strlen(sendBuf);
+    }
+
+    if (iniFD)
+        fprintf(iniFD, ";%s %s\n", cPtr->name, para);
+
+
+    /* das Device wird erst geoeffnet, wenn wir was zu tun haben */
+    /* aber nur, falls es nicht schon offen ist */
+
+    if (deviceFd < 0)
+    {
+        /* As one vclient call opens the link once, all is seen a transaction
+         * This may cause trouble for telnet sessions, as the whole session is
+         * one link activity, even more commands are given within.
+         * This is related to a accept/close on a server socket
+         */
+
+        if ((deviceFd = framer_openDevice(device, cfgPtr->devPtr->protoPtr->id)) == -1)
+        {
+            logIT(LOG_ERR, "Fehler beim oeffnen %s", device);
+            throw std::logic_error("could not open serial device");
+        }
+    }
+
+    pthread_mutex_lock(&config_mutex);
+    pthread_mutex_lock(&device_mutex);
+
+    try
+    {
+        /* falls ein Pre-Kommando definiert wurde, fuehren wir dies zuerst aus */
+        if (cPtr->precmd && (pcPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cPtr->precmd)))
+        {
+            logIT(LOG_INFO, "Fuehre Pre Kommando %s aus", cPtr->precmd);
+
+            if (execByteCode(pcPtr, deviceFd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1) == -1)
+            {
+                logIT(LOG_ERR, "Fehler beim ausfuehren von %s", pcPtr->name);
+                throw std::logic_error("error executing pre command");
+            }
+            else
+            {
+                bzero(buffer, sizeof(buffer));
+                char2hex(buffer, pRecvBuf, pcPtr->blockLength);
+                logIT(LOG_INFO, "Ergebnis Pre-Kommand: %s", buffer);
+            }
+        }
+
+        /* wir fuehren den Bytecode aus,
+        	   -1 -> Fehler
+        	0 -> Formaterierter String
+        	n -> Bytes in Rohform */
+
+        count = execByteCode(cPtr, deviceFd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit);
+
+        if (count == -1)
+            logIT(LOG_ERR, "Fehler beim ausfuehren von %s", cPtr->name);
+        else if (*recvBuf && (count == 0))   /* Unit gewandelt */
+        {
+            logIT(LOG_INFO, "%s", recvBuf);
+            result = std::string(recvBuf);
+        }
+        else
+        {
+            char buffer[MAXBUF];
+
+            count = char2hex(buffer, recvBuf, count);
+
+            if (count)
+            {
+                result = std::string(buffer);
+                logIT(LOG_INFO, "Empfangen: %s", buffer);
+            }
+        }
+
+        if (iniFD)
+            fflush(iniFD);
+    }
+    catch (std::exception& e)
+    {
+        logIT(LOG_ERR, "Exception: %s", e.what());
+    }
+
+    pthread_mutex_unlock(&device_mutex);
+    pthread_mutex_unlock(&config_mutex);
+    return result;
+}
+
 int interactive(int socketfd, char* device)
 {
-
     char readBuf[1000];
-    char* readPtr;
     char prompt[] = "vctrld>";
     char bye[] = "good bye!\n";
     char unknown[] = "ERR: command unknown\n";
     char string[256];
-    commandPtr cPtr;
-    commandPtr pcPtr;
-    static int deviceFd = -1;
-    int count = 0;
     ssize_t rcount = 0;
     short noUnit = 0;
-    char recvBuf[MAXBUF];
-    char pRecvBuf[MAXBUF];
-    char sendBuf[MAXBUF];
-    char cmd[MAXBUF];
-    char para[MAXBUF];
-    char* ptr;
-    size_t sendLen;
-    char buffer[MAXBUF];
 
     Writen(socketfd, prompt, strlen(prompt));
-    bzero(readBuf, sizeof(readBuf));
+    rcount = Readline(socketfd, readBuf, sizeof(readBuf));
 
-
-    while ((rcount = Readline(socketfd, readBuf, sizeof(readBuf))))
+    while (rcount)
     {
         try
         {
-            sendErrMsg(socketfd);
+
             /* Steuerzeichen verdampfen */
             /*readPtr=readBuf+strlen(readBuf); **/
-            readPtr = readBuf + rcount;
-
-            while (iscntrl(*readPtr))
-                *readPtr-- = '\0';
+            for (char* readPtr = readBuf + rcount; iscntrl(*readPtr); readPtr--)
+                *readPtr = 0;
 
             logIT(LOG_INFO, "Befehl: %s", readBuf);
 
             /* wir trennen Kommando und evtl. Optionen am ersten Blank */
-            bzero(cmd, sizeof(cmd));
-            bzero(para, sizeof(para));
+            char* cmd;
+            char* para;
 
-            if ((ptr = strchr(readBuf, ' ')))
+            cmd = readBuf;
+            para = strchr(readBuf, ' ');
+
+            if (para)
             {
-                strncpy(cmd, readBuf, (size_t)(ptr - readBuf));
-                strcpy(para, ptr + 1);
+                *para = 0;
+                para++;
             }
-            else
-                strcpy(cmd, readBuf);
 
             /* hier werden die einzelnen Befehle geparst */
-            if (strstr(readBuf, "help") == readBuf)
+            if (strcmp(cmd, "help") == 0)
                 printHelp(socketfd);
-            else if (strstr(readBuf, "quit") == readBuf)
+            else if (strcmp(cmd, "quit") == 0)
             {
                 Writen(socketfd, bye, strlen(bye));
-                //framer_closeDevice(deviceFd);
                 return 1;
             }
-            else if (strstr(readBuf, "debug on") == readBuf)
-                setDebugFD(socketfd);
-            else if (strstr(readBuf, "debug off") == readBuf)
-                setDebugFD(-1);
-            else if (strstr(readBuf, "unit off") == readBuf)
-                noUnit = 1;
-            else if (strstr(readBuf, "unit on") == readBuf)
-                noUnit = 0;
-            else if (strstr(readBuf, "reload") == readBuf)
+            else if (strcmp(cmd, "debug") == 0)
+            {
+                if (strcmp(para, "on") == 0)
+                    setDebugFD(socketfd);
+                else
+                    setDebugFD(-1);
+            }
+            else if (strcmp(readBuf, "unit") == 0)
+            {
+                if (strcmp(para, "off") == 0)
+                    noUnit = 1;
+                else
+                    noUnit = 0;
+            }
+            else if (strcmp(readBuf, "reload") == 0)
             {
                 if (reloadConfig())
-                {
-                    bzero(string, sizeof(string));
                     snprintf(string, sizeof(string), "XMLFile %s neu geladen\n", xmlfile);
-                    Writen(socketfd, string, strlen(string));
-                }
                 else
-                {
-                    bzero(string, sizeof(string));
                     snprintf(string, sizeof(string), "Laden von XMLFile %s gescheitert, nutze alte Konfig\n", xmlfile);
-                    Writen(socketfd, string, strlen(string));
-                }
 
+                Writen(socketfd, string, strlen(string));
             }
-            else if (strstr(readBuf, "raw") == readBuf)
+            else if (strcmp(readBuf, "raw") == 0)
                 rawModus(socketfd, device);
+            else if (strcmp(readBuf, "commands") == 0)
+                printCommands(socketfd);
 
-            //else if (strstr(readBuf, "close") == readBuf) {
-            //    framer_closeDevice(deviceFd);
-            //    snprintf(string, sizeof(string), "%s geschlossen\n", device);
-            //    Writen(socketfd, string, strlen(string));
-            //    deviceFd = -1;
-            //}
-
-            else if (strstr(readBuf, "commands") == readBuf)
+            else if (strcmp(readBuf, "protocol") == 0)
             {
-                pthread_mutex_lock(&config_mutex);
-                cPtr = cfgPtr->devPtr->cmdPtr;
-
-                while (cPtr)
-                {
-                    if (cPtr->addr)
-                    {
-                        bzero(string, sizeof(string));
-                        snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->description);
-                        Writen(socketfd, string, strlen(string));
-                    }
-
-                    cPtr = cPtr->next;
-                }
-
-                pthread_mutex_unlock(&config_mutex);
-            }
-            else if (strstr(readBuf, "protocol") == readBuf)
-            {
-                bzero(string, sizeof(string));
                 snprintf(string, sizeof(string), "%s\n", cfgPtr->devPtr->protoPtr->name);
                 Writen(socketfd, string, strlen(string));
             }
-            else if (strstr(readBuf, "device") == readBuf)
+            else if (strcmp(readBuf, "device") == 0)
             {
-                bzero(string, sizeof(string));
                 snprintf(string, sizeof(string), "%s (ID=%s) (Protocol=%s)\n", cfgPtr->devPtr->name,
                          cfgPtr->devPtr->id,
                          cfgPtr->devPtr->protoPtr->name);
                 Writen(socketfd, string, strlen(string));
             }
-            else if (strstr(readBuf, "version") == readBuf)
+            else if (strcmp(readBuf, "version") == 0)
             {
-                bzero(string, sizeof(string));
                 snprintf(string, sizeof(string), "Version: %s\n", VERSION_DAEMON);
                 Writen(socketfd, string, strlen(string));
             }
-            /* Ist das Kommando in der XML definiert ? */
-            else if ((cPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cmd)) && (cPtr->addr))
+            else if (commandPtr cptr = findCommand(cmd))
             {
-                bzero(string, sizeof(string));
-                bzero(recvBuf, sizeof(recvBuf));
-                bzero(sendBuf, sizeof(sendBuf));
-                bzero(pRecvBuf, sizeof(pRecvBuf));
-
-
-                /* Falls Unit Off wandeln wir die uebergebenen Parameter in Hex */
-                /* oder keine Unit definiert ist */
-                bzero(sendBuf, sizeof(sendBuf));
-
-                if (noUnit && *para)
-                {
-                    if ((sendLen = string2chr(para, sendBuf, sizeof(sendBuf))) == 0)
-                    {
-                        logIT(LOG_ERR, "Kein Hex string: %s", para);
-                        sendErrMsg(socketfd);
-
-                        if (!Writen(socketfd, prompt, strlen(prompt)))
-                        {
-                            sendErrMsg(socketfd);
-                            //framer_closeDevice(deviceFd);
-                            return (0);
-                        }
-
-                        continue;
-                    }
-
-                    /* falls sendLen > als len der Befehls, nehmen wir len */
-                    if (sendLen > cPtr->blockLength)
-                    {
-                        logIT(LOG_WARNING, "Laenge des Hex Strings > Sendelaenge des Befehls, sende nur %d Byte", cPtr->blockLength);
-                        sendLen = cPtr->blockLength;
-                    }
-                }
-                else if (*para)   /* wir kopieren die Parameter, darum kuemert sich execbyteCode selbst */
-                {
-                    strcpy(sendBuf, para);
-                    sendLen = strlen(sendBuf);
-                }
-
-                if (iniFD)
-                    fprintf(iniFD, ";%s\n", readBuf);
-
-
-                /* das Device wird erst geoeffnet, wenn wir was zu tun haben */
-                /* aber nur, falls es nicht schon offen ist */
-
-                if (deviceFd < 0)
-                {
-                    /* As one vclient call opens the link once, all is seen a transaction
-                     * This may cause trouble for telnet sessions, as the whole session is
-                     * one link activity, even more commands are given within.
-                     * This is related to a accept/close on a server socket
-                     */
-
-                    if ((deviceFd = framer_openDevice(device, cfgPtr->devPtr->protoPtr->id)) == -1)
-                    {
-                        logIT(LOG_ERR, "Fehler beim oeffnen %s", device);
-                        sendErrMsg(socketfd);
-
-                        if (!Writen(socketfd, prompt, strlen(prompt)))
-                        {
-                            sendErrMsg(socketfd);
-                            framer_closeDevice(deviceFd);
-                            return (0);
-                        }
-
-                        continue;
-                    }
-                }
-
-                pthread_mutex_lock(&config_mutex);
-                pthread_mutex_lock(&device_mutex);
-
-                try
-                {
-                    /* falls ein Pre-Kommando definiert wurde, fuehren wir dies zuerst aus */
-                    if (cPtr->precmd && (pcPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cPtr->precmd)))
-                    {
-                        logIT(LOG_INFO, "Fuehre Pre Kommando %s aus", cPtr->precmd);
-
-                        if (execByteCode(pcPtr, deviceFd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1, pcPtr->retry, pRecvBuf, pcPtr->recvTimeout) == -1)
-                        {
-                            logIT(LOG_ERR, "Fehler beim ausfuehren von %s", readBuf);
-                            sendErrMsg(socketfd);
-                            pthread_mutex_unlock(&device_mutex);
-                            pthread_mutex_unlock(&config_mutex);
-                            break;
-                        }
-                        else
-                        {
-                            bzero(buffer, sizeof(buffer));
-                            char2hex(buffer, pRecvBuf, pcPtr->blockLength);
-                            logIT(LOG_INFO, "Ergebnis Pre-Kommand: %s", buffer);
-                        }
-
-
-                    }
-
-                    /* wir fuehren den Bytecode aus,
-                    	   -1 -> Fehler
-                    	0 -> Formaterierter String
-                    	n -> Bytes in Rohform */
-
-                    count = execByteCode(cPtr, deviceFd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit, cPtr->retry, pRecvBuf, cPtr->recvTimeout);
-
-                    if (count == -1)
-                    {
-                        logIT(LOG_ERR, "Fehler beim ausfuehren von %s", readBuf);
-                        sendErrMsg(socketfd);
-                    }
-                    else if (*recvBuf && (count == 0))   /* Unit gewandelt */
-                    {
-
-                        logIT(LOG_INFO, "%s", recvBuf);
-                        snprintf(string, sizeof(string), "%s\n", recvBuf);
-                        Writen(socketfd, string, strlen(string));
-                    }
-                    else
-                    {
-                        int n;
-                        char* ptr;
-                        ptr = recvBuf;
-                        char buffer[MAXBUF];
-                        bzero(buffer, sizeof(buffer));
-
-                        for (n = 0; n < count; n++)   /* wir haben Zeichen empfangen */
-                        {
-                            bzero(string, sizeof(string));
-                            unsigned char byte = *ptr++ & 255;
-                            snprintf(string, sizeof(string), "%02X ", byte);
-                            strcat(buffer, string);
-
-                            if (n >= MAXBUF - 3)
-                                break;
-                        }
-
-                        if (count)
-                        {
-                            snprintf(string, sizeof(string), "%s\n", buffer);
-                            Writen(socketfd, string, strlen(string));
-                            logIT(LOG_INFO, "Empfangen: %s", buffer);
-                        }
-                    }
-
-                    if (iniFD)
-                        fflush(iniFD);
-                }
-                catch (std::exception& e)
-                {
-                    logIT(LOG_ERR, "%s", e.what());
-                }
-
-                pthread_mutex_unlock(&device_mutex);
-                pthread_mutex_unlock(&config_mutex);
+                std::string result = runCommand(cptr, para, noUnit, device) + "\n";
+                Writen(socketfd, (void*)result.c_str(), result.length());
             }
-            else if (strstr(readBuf, "detail") == readBuf)
-            {
-                readPtr = readBuf + strlen("detail");
+            else if (strcmp(readBuf, "detail") == 0)
+                printCommandDetails(readBuf, socketfd);
 
-                while (isspace(*readPtr))
-                    readPtr++;
-
-                try
-                {
-                    pthread_mutex_lock(&config_mutex);
-
-                    /* Ist das Kommando in der XML definiert ? */
-                    if (readPtr && (cPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, readPtr)))
-                    {
-                        bzero(string, sizeof(string));
-                        snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->send);
-                        Writen(socketfd, string, strlen(string));
-                        /* Error String definiert */
-                        char buf[MAXBUF];
-                        bzero(buf, sizeof(buf));
-
-                        if (cPtr->errStr && char2hex(buf, cPtr->errStr, cPtr->blockLength))
-                        {
-                            snprintf(string, sizeof(string), "\tError bei (Hex): %s", buf);
-                            Writen(socketfd, string, strlen(string));
-                        }
-
-                        /* recvTimeout ?*/
-                        if (cPtr->recvTimeout)
-                        {
-                            snprintf(string, sizeof(string), "\tRECV Timeout: %d ms\n", cPtr->recvTimeout);
-                            Writen(socketfd, string, strlen(string));
-                        }
-
-                        /* Retry definiert ? */
-                        if (cPtr->retry)
-                        {
-                            snprintf(string, sizeof(string), "\tRetry: %d\n", cPtr->retry);
-                            Writen(socketfd, string, strlen(string));
-                        }
-
-                        /* Pre-Command definiert ?*/
-                        if (cPtr->precmd)
-                        {
-                            snprintf(string, sizeof(string), "\tPre-Kommando (P0-P9): %s\n", cPtr->precmd);
-                            Writen(socketfd, string, strlen(string));
-                        }
-                    }
-                    else
-                    {
-                        bzero(string, sizeof(string));
-                        snprintf(string, sizeof(string), "ERR: command %s unbekannt\n", readPtr);
-                        Writen(socketfd, string, strlen(string));
-                    }
-                }
-                catch (std::exception& e)
-                {
-                    logIT(LOG_ERR, "%s", e.what());
-                }
-
-                pthread_mutex_unlock(&config_mutex);
-            }
             else if (*readBuf)
-            {
-                if (!Writen(socketfd, unknown, strlen(unknown)))
-                {
-                    sendErrMsg(socketfd);
-                    //framer_closeDevice(deviceFd);
-                    return (0);
-                }
-
-            }
+                Writen(socketfd, unknown, strlen(unknown));
         }
         catch (std::exception& e)
         {
             logIT(LOG_ERR, "%s", e.what());
         }
 
-        bzero(string, sizeof(string));
         sendErrMsg(socketfd);
 
         if (!Writen(socketfd, prompt, strlen(prompt)))
-        {
-            sendErrMsg(socketfd);
             return 0;
-        }
 
-        bzero(readBuf, sizeof(readBuf));
+        rcount = Readline(socketfd, readBuf, sizeof(readBuf));
     }
 
     sendErrMsg(socketfd);
-    //framer_closeDevice(deviceFd);
     return 0;
 }
 
@@ -673,6 +631,14 @@ static void sigTermHandler(int signo)
     logIT(LOG_NOTICE, "SIGTERM empfangen");
     exit(1);
 }
+
+
+static void sigPipeHandler(int signo)
+{
+    logIT(LOG_ERR, "SIGPIPE empfangen");
+}
+
+
 
 void* connection_handler(void* voidArgs)
 {
@@ -857,6 +823,13 @@ int main(int argc, char* argv[])
         logIT(LOG_ERR, "Fehler beim Signalhandling SIGTERM: %s", strerror(errno));
         exit(1);
     }
+
+    if (signal(SIGPIPE, sigPipeHandler) == SIG_ERR)
+    {
+        logIT(LOG_ERR, "Fehler beim Signalhandling SIGPIPE: %s", strerror(errno));
+        exit(1);
+    }
+
 
     /* falls -i angegeben wurde, loggen wir die Befehle im Simulator INI Format */
     if (simuOut)

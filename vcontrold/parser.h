@@ -6,7 +6,7 @@
 int parseLine(char* lineo, char* hex, int* hexlen, char* uSPtr, ssize_t uSPtrLen);
 int execCmd(char* cmd, int fd, char* result, int resultLen);
 void removeCompileList(compilePtr ptr);
-int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen, char* sendBuf, size_t sendLen, short supressUnit, int retry, char* pRecvPtr, unsigned short recvTimeout);
+int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen, char* sendBuf, size_t sendLen, short supressUnit);
 void compileCommand(devicePtr dPtr);
 
 /* Token Definition */
