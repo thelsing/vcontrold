@@ -520,7 +520,7 @@ std::string bulkExec(char* para, short noUnit, char* device)
     }
 
     YAML::Emitter out;
-    out << commands;
+    out << YAML::Flow << commands;
     std::string result(out.c_str());
     return result;
 }

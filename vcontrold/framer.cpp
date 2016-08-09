@@ -86,9 +86,10 @@ static void framer_set_actaddr(void* pdu)
     {
         snprintf(string, sizeof(string), ">FRAMER: addr was still active %04X",
                  framer_current_addr);
+        logIT(LOG_ERR, string);
     }
 
-    logIT(LOG_ERR, string);
+
     framer_current_addr = *(uint16*)(((char*)pdu) + P300_ADDR_OFFSET);
 }
 
