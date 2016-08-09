@@ -1070,12 +1070,12 @@ icmdPtr parseICmd(xmlNodePtr cur)
 
 devicePtr parseDevice(xmlNodePtr cur, protocolPtr pPtr)
 {
-    devicePtr dPtr;
-    devicePtr dStartPtr = NULL;
-    char* proto;
-    char* name;
-    char* id;
-    xmlNodePtr prevPtr;
+    devicePtr dPtr = 0;
+    devicePtr dStartPtr = 0;
+    char* proto = 0;
+    char* name = 0;
+    char* id = 0;
+    xmlNodePtr prevPtr = 0;
 
     while (cur)
     {

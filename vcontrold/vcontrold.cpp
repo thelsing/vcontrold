@@ -516,18 +516,21 @@ std::string bulkExec(char* para, short noUnit, char* device)
         if (!cptr)
             continue;
 
+        //std::string cmdResult("\"");
+        //cmdResult += runCommand(cptr, para.c_str(), noUnit, device);
+        //cmdResult += "\"";
         commands[cmd] = runCommand(cptr, para.c_str(), noUnit, device);
     }
 
     YAML::Emitter out;
-    out << YAML::Flow << commands;
+    out << YAML::Flow << YAML::DoubleQuoted << commands;
     std::string result(out.c_str());
     return result;
 }
 
 int interactive(int socketfd, char* device)
 {
-    char readBuf[1000];
+    char readBuf[MAXBUF];
     char prompt[] = "vctrld>";
     char bye[] = "good bye!\n";
     char unknown[] = "ERR: command unknown\n";
