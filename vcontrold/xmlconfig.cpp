@@ -1145,13 +1145,13 @@ devicePtr parseDevice(xmlNodePtr cur, protocolPtr pPtr)
 protocolPtr parseProtocol(xmlNodePtr cur)
 {
     int protoFound = 0;
-    protocolPtr protoPtr;
-    protocolPtr protoStartPtr = NULL;
-    macroPtr mPtr;
-    icmdPtr icPtr;
-    char* proto;
-    char* chrPtr;
-    xmlNodePtr prevPtr;
+    protocolPtr protoPtr = 0;
+    protocolPtr protoStartPtr = 0;
+    macroPtr mPtr = 0;
+    icmdPtr icPtr = 0;
+    char* proto = 0;
+    char* chrPtr = 0;
+    xmlNodePtr prevPtr = 0;
 
     while (cur)
     {
@@ -1254,16 +1254,18 @@ void removeComments(xmlNodePtr node)
 
 int parseXMLFile(const char* filename)
 {
-    xmlDocPtr doc;
-    xmlNodePtr cur, curStart;
-    xmlNodePtr prevPtr;
-    xmlNsPtr ns;
-    devicePtr dPtr;
-    commandPtr cPtr, ncPtr;
-    protocolPtr TprotoPtr = NULL;
-    devicePtr TdevPtr = NULL;
-    commandPtr TcmdPtr = NULL;
-    configPtr TcfgPtr = NULL;
+    xmlDocPtr doc = 0;
+    xmlNodePtr cur = 0;
+    xmlNodePtr curStart = 0;
+    xmlNodePtr prevPtr = 0;
+    xmlNsPtr ns = 0;
+    devicePtr dPtr = 0;
+    commandPtr cPtr = 0;
+    commandPtr ncPtr = 0;
+    protocolPtr TprotoPtr = 0;
+    devicePtr TdevPtr = 0;
+    commandPtr TcmdPtr = 0;
+    configPtr TcfgPtr = 0;
 
 
 
@@ -1425,7 +1427,7 @@ int parseXMLFile(const char* filename)
             cPtr->byteLength = 1;
         }
 
-        cPtr->blockLength = cPtr->bytePosition + cPtr->byteLength;
+        //cPtr->blockLength = cPtr->bytePosition + cPtr->byteLength;
 
         dPtr = TdevPtr;
 

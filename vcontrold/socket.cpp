@@ -133,7 +133,7 @@ int openSocket(int tcpport)
 }
 
 
-int listenToSocket(int listenfd, short(*checkP)(char*))
+int listenToSocket(int listenfd, short(*checkIP)(char*))
 {
     int connfd;
     struct sockaddr_storage cliaddr;
@@ -153,6 +153,12 @@ int listenToSocket(int listenfd, short(*checkP)(char*))
                     clienthost, sizeof(clienthost),
                     clientservice, sizeof(clientservice),
                     NI_NUMERICHOST);
+
+        if (!(*checkIP)(clienthost))
+        {
+            close(connfd);
+            continue;
+        }
 
         if (connfd < 0)
         {

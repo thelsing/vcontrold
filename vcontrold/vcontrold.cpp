@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/times.h>
 
 #include <sys/time.h>
 #include <sys/ioctl.h>
@@ -370,18 +371,19 @@ commandPtr findCommand(const char* cmd)
 
 std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const char* device)
 {
+    struct tms tms_t;
+    clock_t start, end;
+    double clktck = (double)sysconf(_SC_CLK_TCK);
+    start = times(&tms_t);
+
     std::string result("");
-
-    char buffer[MAXBUF];
     size_t sendLen = 0;
-
 
     char recvBuf[MAXBUF];
     char pRecvBuf[MAXBUF];
     char sendBuf[MAXBUF];
     int count = 0;
 
-    commandPtr pcPtr;
     char string[256] = "";
     static int deviceFd = -1;
 
@@ -444,24 +446,6 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const ch
 
     try
     {
-        /* falls ein Pre-Kommando definiert wurde, fuehren wir dies zuerst aus */
-        if (cPtr->precmd && (pcPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cPtr->precmd)))
-        {
-            logIT(LOG_INFO, "Fuehre Pre Kommando %s aus", cPtr->precmd);
-
-            if (execByteCode(pcPtr, deviceFd, pRecvBuf, sizeof(pRecvBuf), sendBuf, sendLen, 1) == -1)
-            {
-                logIT(LOG_ERR, "Fehler beim ausfuehren von %s", pcPtr->name);
-                throw std::logic_error("error executing pre command");
-            }
-            else
-            {
-                bzero(buffer, sizeof(buffer));
-                char2hex(buffer, pRecvBuf, pcPtr->blockLength);
-                logIT(LOG_INFO, "Ergebnis Pre-Kommand: %s", buffer);
-            }
-        }
-
         /* wir fuehren den Bytecode aus,
         	   -1 -> Fehler
         	0 -> Formaterierter String
@@ -499,6 +483,8 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const ch
 
     pthread_mutex_unlock(&device_mutex);
     pthread_mutex_unlock(&config_mutex);
+    end = times(&tms_t);
+    logIT(LOG_WARNING, "runcommand took (%0.1f ms)", ((double)(end - start) / clktck) * 1000);
     return result;
 }
 
@@ -516,9 +502,6 @@ std::string bulkExec(char* para, short noUnit, char* device)
         if (!cptr)
             continue;
 
-        //std::string cmdResult("\"");
-        //cmdResult += runCommand(cptr, para.c_str(), noUnit, device);
-        //cmdResult += "\"";
         commands[cmd] = runCommand(cptr, para.c_str(), noUnit, device);
     }
 
