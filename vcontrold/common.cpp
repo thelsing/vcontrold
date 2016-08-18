@@ -23,7 +23,7 @@ char errMsg[2000];
 int errClass = 99;
 int dbgFD = -1;
 
-int initLog(int useSyslog, char* logfile, int debugSwitch)
+int initLog(int useSyslog, const char* logfile, int debugSwitch)
 {
     /* oeffnet bei Bedarf syslog oder log-Datei */
     if (useSyslog)

@@ -2,20 +2,22 @@
  * Vito-Control Daemon fuer Vito- Abfrage
  *  */
 /* $Id: vcontrold.c 34 2008-04-06 19:39:29Z marcust $ */
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstdio>
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
 #include <syslog.h>
 #include <unistd.h>
 #include <termios.h>
-#include <string.h>
+#include <cstring>
 #include <time.h>
 #include <getopt.h>
 #include <pthread.h>
 #include <stdexcept>
 #include <yaml-cpp/yaml.h>
+#include <string>
+#include <memory>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -40,26 +42,24 @@ const char* VERSION_DAEMON = "0.98 TK";
 /* Globale Variablen */
 #ifdef __CYGWIN__
     const char* xmlfile = "vcontrold.xml";
-    const char* INIOUTFILE = "sim-%s.ini";
 #else
     const char* xmlfile = "/etc/vcontrold/vcontrold.xml";
-    const char* INIOUTFILE = "/tmp/sim-%s.ini";
 #endif
-FILE* iniFD = NULL;
+
 int makeDaemon = 1;
 int inetversion = 0;
 pthread_mutex_t device_mutex;
 pthread_mutex_t config_mutex;
+std::string device("");
 
 /* in xmlconfig.c definiert */
-extern protocolPtr protoPtr;
-extern devicePtr devPtr;
 extern configPtr cfgPtr;
+extern commandPtr cmdPtr;
+
 
 typedef struct _thread_args
 {
     int sock_fd;
-    char device[20];
 } thread_args;
 
 void usage()
@@ -84,112 +84,34 @@ short checkIP(char* ip)
     }
 }
 
-int reloadConfig()
+bool reloadConfig()
 {
     pthread_mutex_lock(&config_mutex);
 
     if (parseXMLFile(xmlfile))
     {
-        compileCommand(devPtr);
+        expand(cmdPtr, cfgPtr->protoPtr);
+        buildByteCode(cmdPtr);
         logIT(LOG_NOTICE, "XMLFile %s neu geladen", xmlfile);
         pthread_mutex_unlock(&config_mutex);
-        return (1);
+        return true;
     }
     else
     {
         logIT(LOG_ERR, "Laden von XMLFile %s gescheitert", xmlfile);
         pthread_mutex_unlock(&config_mutex);
-        return (0);
+        return false;
     }
 }
 
 
-int readCmdFile(char* filename, char* result, int* resultLen, char* device)
-{
-    FILE* cmdPtr;
-    char line[MAXBUF];
-    char string[256];
-    char recvBuf[MAXBUF];
-    char* resultPtr = result;
-    int fd;
-    int count = 0;
-    //void *uPtr;
-    //int maxResLen=*resultLen;
-    *resultLen = 0; /* noch keine Zeichen empfangen :-) */
-
-    /* das Device wird erst geoeffnet, wenn wir was zu tun haben */
-    if ((fd = framer_openDevice(device, cfgPtr->devPtr->protoPtr->id)) == -1)
-    {
-        logIT(LOG_ERR, "Fehler beim oeffnen %s", device);
-        result[0] = 0;
-        *resultLen = 0;
-        return (0);
-    }
-
-    cmdPtr = fopen(filename, "r");
-
-    if (!cmdPtr)
-    {
-        logIT(LOG_ERR, "Kann Cmd File %s nicht oeffnen", filename);
-        result[0] = 0;
-        *resultLen = 0;
-        framer_closeDevice(fd);
-        return (0);
-    }
-
-    logIT(LOG_INFO, "Lese Cmd File %s", filename);
-    /* Queue leeren */
-    tcflush(fd, TCIOFLUSH);
-
-    while (fgets(line, MAXBUF - 1, cmdPtr))
-    {
-        /* \n verdampfen */
-        line[strlen(line) - 1] = '\0';
-        bzero(recvBuf, sizeof(recvBuf));
-        count = execCmd(line, fd, recvBuf, sizeof(recvBuf));
-        int n;
-        char* ptr;
-        ptr = recvBuf;
-        char buffer[MAXBUF];
-        bzero(buffer, sizeof(buffer));
-
-        for (n = 0; n < count; n++)   /* wir haben Zeichen empfangen */
-        {
-            *resultPtr++ = *ptr;
-            (*resultLen)++;
-            bzero(string, sizeof(string));
-            unsigned char byte = *ptr++ & 255;
-            snprintf(string, sizeof(string), "%02X ", byte);
-            strcat(buffer, string);
-
-            if (n >= MAXBUF - 3)
-                break;
-        }
-
-        if (count - 1)
-        {
-            /* timeout */
-        }
-
-        if (count)
-            logIT(LOG_INFO, "Empfangen: %s", buffer);
-
-    }
-
-    framer_closeDevice(fd);
-    fclose(cmdPtr);
-    return (1);
-}
 void printHelp(int socketfd)
 {
     char string[] = " \
-close: schliesst Verbindung zum Device\n \
 commands: Listet alle in der XML definierten Kommandos fuer das Protokoll\n \
 debug on|off: Debug Informationen an/aus\n \
 detail <command>: Zeigt detaillierte Informationen zum <command> an\n \
-device: In der XML gewaehltes Device\n \
 protocol: Aktives Protokoll\n \
-raw: Raw Modus, Befehle WAIT,SEND,RECV,PAUSE Abschluss mit END\n \
 reload: Neu-Laden der XML Konfiguration\n \
 unit on|off: Wandlung des Ergebnisses lsut definierter Unit an/aus\n \
 version: Zeigt die Versionsnummer an\n \
@@ -197,88 +119,11 @@ quit: beendet die Verbindung\n";
     Writen(socketfd, string, strlen(string));
 }
 
-int rawModus(int socketfd, char* device)
-{
-    /* hier schreiben wir alle ankommenden Befehle in eine temp. Datei */
-    /* diese Datei wird dann an readCmdFile uerbegeben */
-    char readBuf[MAXBUF];
-    char string[256];
-
-#ifdef __CYGWIN__
-    char tmpfile[] = "vitotmp-XXXXXX";
-#else
-    char tmpfile[] = "/tmp/vitotmp-XXXXXX";
-#endif
-
-    FILE* filePtr;
-    char result[MAXBUF];
-    int resultLen;
-
-    if (!mkstemp(tmpfile))
-    {
-        /* noch ein Versuch */
-        if (!mkstemp(tmpfile))
-        {
-            logIT(LOG_ERR, "Fehler Erzeugung mkstemp");
-            return (0);
-        }
-    }
-
-    filePtr = fopen(tmpfile, "w+");
-
-    if (!filePtr)
-    {
-        logIT(LOG_ERR, "Kann Tmp File %s nicht anlegen", tmpfile);
-        return (0);
-    }
-
-    logIT(LOG_INFO, "Raw Modus: Temp Datei: %s", tmpfile);
-
-    while (Readline(socketfd, readBuf, sizeof(readBuf)))
-    {
-        /* hier werden die einzelnen Befehle geparst */
-        if (strstr(readBuf, "END") == readBuf)
-        {
-            fclose(filePtr);
-            resultLen = sizeof(result);
-            readCmdFile(tmpfile, result, &resultLen, device);
-
-            if (resultLen)   /* es wurden Zeichen empfangen */
-            {
-                char buffer[MAXBUF];
-                bzero(buffer, sizeof(buffer));
-                char2hex(buffer, result, resultLen);
-                snprintf(string, sizeof(string), "Result: %s\n", buffer);
-                Writen(socketfd, string, strlen(string));
-            }
-
-            remove(tmpfile);
-            return (1);
-        }
-
-        logIT(LOG_INFO, "Raw: Gelesen: %s", readBuf);
-
-        /*
-        int n;
-        if ((n=fputs(readBuf,filePtr))== 0) {
-        */
-        if (fputs(readBuf, filePtr) == EOF)
-            logIT(LOG_ERR, "Fehler beim schreiben tmp Datei");
-        else
-        {
-            /* debug stuff */
-        }
-
-    }
-
-    return 0;			// is this correct?
-}
-
 void printCommands(int socketfd)
 {
     char string[256] = "";
     pthread_mutex_lock(&config_mutex);
-    commandPtr cPtr = cfgPtr->devPtr->cmdPtr;
+    commandPtr cPtr = cmdPtr;
 
     while (cPtr)
     {
@@ -308,7 +153,7 @@ void printCommandDetails(char* readBuf, int socketfd)
         commandPtr cPtr;
 
         /* Ist das Kommando in der XML definiert ? */
-        if (readPtr && (cPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, readPtr)))
+        if (readPtr && (cPtr = getCommandNode(cmdPtr, readPtr)))
         {
             bzero(string, sizeof(string));
             snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->send);
@@ -336,13 +181,6 @@ void printCommandDetails(char* readBuf, int socketfd)
                 snprintf(string, sizeof(string), "\tRetry: %d\n", cPtr->retry);
                 Writen(socketfd, string, strlen(string));
             }
-
-            /* Pre-Command definiert ?*/
-            if (cPtr->precmd)
-            {
-                snprintf(string, sizeof(string), "\tPre-Kommando (P0-P9): %s\n", cPtr->precmd);
-                Writen(socketfd, string, strlen(string));
-            }
         }
         else
         {
@@ -361,7 +199,7 @@ void printCommandDetails(char* readBuf, int socketfd)
 
 commandPtr findCommand(const char* cmd)
 {
-    commandPtr cPtr = getCommandNode(cfgPtr->devPtr->cmdPtr, cmd);
+    commandPtr cPtr = getCommandNode(cmdPtr, cmd);
 
     if (cPtr && cPtr->addr)
         return cPtr;
@@ -369,7 +207,7 @@ commandPtr findCommand(const char* cmd)
     return 0;
 }
 
-std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const char* device)
+std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
 {
     struct tms tms_t;
     clock_t start, end;
@@ -419,10 +257,6 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const ch
         sendLen = strlen(sendBuf);
     }
 
-    if (iniFD)
-        fprintf(iniFD, ";%s %s\n", cPtr->name, para);
-
-
     /* das Device wird erst geoeffnet, wenn wir was zu tun haben */
     /* aber nur, falls es nicht schon offen ist */
 
@@ -434,9 +268,9 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const ch
          * This is related to a accept/close on a server socket
          */
 
-        if ((deviceFd = framer_openDevice(device, cfgPtr->devPtr->protoPtr->id)) == -1)
+        if ((deviceFd = framer_openDevice(device.c_str(), cfgPtr->protoPtr->id)) == -1)
         {
-            logIT(LOG_ERR, "Fehler beim oeffnen %s", device);
+            logIT(LOG_ERR, "Fehler beim oeffnen %s", device.c_str());
             throw std::logic_error("could not open serial device");
         }
     }
@@ -472,9 +306,6 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const ch
                 logIT(LOG_INFO, "Empfangen: %s", buffer);
             }
         }
-
-        if (iniFD)
-            fflush(iniFD);
     }
     catch (std::exception& e)
     {
@@ -488,7 +319,7 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit, const ch
     return result;
 }
 
-std::string bulkExec(char* para, short noUnit, char* device)
+std::string bulkExec(char* para, short noUnit)
 {
     YAML::Node commands = YAML::Load(para);
 
@@ -502,7 +333,7 @@ std::string bulkExec(char* para, short noUnit, char* device)
         if (!cptr)
             continue;
 
-        commands[cmd] = runCommand(cptr, para.c_str(), noUnit, device);
+        commands[cmd] = runCommand(cptr, para.c_str(), noUnit);
     }
 
     YAML::Emitter out;
@@ -511,7 +342,7 @@ std::string bulkExec(char* para, short noUnit, char* device)
     return result;
 }
 
-int interactive(int socketfd, char* device)
+int interactive(int socketfd)
 {
     char readBuf[MAXBUF];
     char prompt[] = "vctrld>";
@@ -580,21 +411,12 @@ int interactive(int socketfd, char* device)
 
                 Writen(socketfd, string, strlen(string));
             }
-            else if (strcmp(cmd, "raw") == 0)
-                rawModus(socketfd, device);
             else if (strcmp(cmd, "commands") == 0)
                 printCommands(socketfd);
 
             else if (strcmp(cmd, "protocol") == 0)
             {
-                snprintf(string, sizeof(string), "%s\n", cfgPtr->devPtr->protoPtr->name);
-                Writen(socketfd, string, strlen(string));
-            }
-            else if (strcmp(cmd, "device") == 0)
-            {
-                snprintf(string, sizeof(string), "%s (ID=%s) (Protocol=%s)\n", cfgPtr->devPtr->name,
-                         cfgPtr->devPtr->id,
-                         cfgPtr->devPtr->protoPtr->name);
+                snprintf(string, sizeof(string), "%s\n", cfgPtr->protoPtr->name);
                 Writen(socketfd, string, strlen(string));
             }
             else if (strcmp(cmd, "version") == 0)
@@ -604,12 +426,12 @@ int interactive(int socketfd, char* device)
             }
             else if (strcmp(cmd, "bulkexec") == 0)
             {
-                std::string result = bulkExec(para, noUnit, device) + "\n";
+                std::string result = bulkExec(para, noUnit) + "\n";
                 Writen(socketfd, (void*)result.c_str(), result.length());
             }
             else if (commandPtr cptr = findCommand(cmd))
             {
-                std::string result = runCommand(cptr, para, noUnit, device) + "\n";
+                std::string result = runCommand(cptr, para, noUnit) + "\n";
                 Writen(socketfd, (void*)result.c_str(), result.length());
             }
             else if (strcmp(readBuf, "detail") == 0)
@@ -657,11 +479,9 @@ static void sigPipeHandler(int signo)
 
 void* connection_handler(void* voidArgs)
 {
-    thread_args* args = (thread_args*)voidArgs;
-    logIT(LOG_DEBUG, "ch: device: %s", args->device);
-    interactive(args->sock_fd, args->device);
+    std::shared_ptr<thread_args> args((thread_args*)voidArgs);
+    interactive(args->sock_fd);
     closeSocket(args->sock_fd);
-    free(args);
     return 0;
 }
 
@@ -672,14 +492,10 @@ int main(int argc, char* argv[])
 {
 
     /* Auswertung der Kommandozeilenschalter */
-    char device[20] = "";
-    char* cmdfile = NULL;
-    char* logfile = NULL;
-    static int useSyslog = 0;
-    static int debug = 0;
-    static int verbose = 0;
+    std::string logfile("");
+    int useSyslog = 0;
+    int debug = 0;
     int tcpport = 0;
-    static int simuOut = 0;
     int opt;
 
     while (1)
@@ -687,16 +503,13 @@ int main(int argc, char* argv[])
 
         static struct option long_options[] =
         {
-            {"commandfile",	required_argument,	0, 'c'},
             {"device",		required_argument,	0, 'd'},
             {"debug",		no_argument,		&debug, 1},
-            {"vsim",		no_argument,		&simuOut, 1},
             {"logfile",		required_argument,	0, 'l'},
             {"nodaemon",	no_argument,		&makeDaemon, 0},
             {"port",		required_argument,	0, 'p'},
             {"syslog",		no_argument,		&useSyslog, 1},
             {"xmlfile",		required_argument,	0, 'x'},
-            {"verbose",		no_argument,		&verbose, 1},
             {"inet4",		no_argument,		&inetversion, 4},
             {"inet6",		no_argument,		&inetversion, 6},
             {"help",		no_argument,		0,	0},
@@ -704,7 +517,7 @@ int main(int argc, char* argv[])
         };
         /* getopt_long stores the option index here. */
         int option_index = 0;
-        opt = getopt_long(argc, argv, "c:d:gil:np:svx:46",
+        opt = getopt_long(argc, argv, "d:gl:np:sx:46",
                           long_options, &option_index);
 
         /* Detect the end of the options. */
@@ -719,16 +532,6 @@ int main(int argc, char* argv[])
                 if (long_options[option_index].flag != 0)
                     break;
 
-                if (verbose)
-                {
-                    printf("option %s", long_options[option_index].name);
-
-                    if (optarg)
-                        printf(" with arg %s", optarg);
-
-                    printf("\n");
-                }
-
                 if (strcmp("help", long_options[option_index].name) == 0)
                     usage();
 
@@ -742,20 +545,12 @@ int main(int argc, char* argv[])
                 inetversion = 6;
                 break;
 
-            case 'c':
-                cmdfile = optarg;
-                break;
-
             case 'd':
-                strncpy(device, optarg, 20);
+                device = std::string(optarg);
                 break;
 
             case 'g':
                 debug = 1;
-                break;
-
-            case 'i':
-                simuOut = 1;
                 break;
 
             case 'l':
@@ -774,11 +569,6 @@ int main(int argc, char* argv[])
                 useSyslog = 1;
                 break;
 
-            case 'v':
-                puts("option -v\n");
-                verbose = 1;
-                break;
-
             case 'x':
                 xmlfile = optarg;
                 break;
@@ -793,7 +583,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    initLog(useSyslog, logfile, debug);
+    initLog(useSyslog, logfile.c_str(), debug);
 
     if (!parseXMLFile(xmlfile))
     {
@@ -808,10 +598,10 @@ int main(int argc, char* argv[])
         if (!tcpport)
             tcpport = cfgPtr->port;
 
-        if (!device[0])
-            strncpy(device, cfgPtr->tty, 20);
+        if (device.empty())
+            device = cfgPtr->tty;
 
-        if (!logfile)
+        if (logfile.empty())
             logfile = cfgPtr->logfile;
 
         if (!useSyslog)
@@ -821,7 +611,7 @@ int main(int argc, char* argv[])
             debug = cfgPtr->debug;
     }
 
-    if (!initLog(useSyslog, logfile, debug))
+    if (!initLog(useSyslog, logfile.c_str(), debug))
         exit(1);
 
     pthread_mutex_init(&device_mutex, NULL);
@@ -846,24 +636,12 @@ int main(int argc, char* argv[])
     }
 
 
-    /* falls -i angegeben wurde, loggen wir die Befehle im Simulator INI Format */
-    if (simuOut)
-    {
-        char file[100];
-        snprintf(file, sizeof(file), INIOUTFILE, cfgPtr->devID);
-
-        if (!(iniFD = fopen(file, "w")))
-            logIT(LOG_ERR, "Konnte Simulator INI File %s nicht anlegen", file);
-
-        fprintf(iniFD, "[DATA]\n");
-    }
-
     /* die Macros werden ersetzt und die zu sendenden Strings in Bytecode gewandelt */
-    compileCommand(devPtr);
+    expand(cmdPtr, cfgPtr->protoPtr);
+    buildByteCode(cmdPtr);
 
     int fd = 0;
     char result[MAXBUF];
-    int resultLen = sizeof(result);
     int sid;
     int pidFD = 0;
     char str[10];
@@ -963,9 +741,8 @@ int main(int argc, char* argv[])
                 /* Socket hat fd zurueckgegeben, den Rest machen wir in interactive */
                 pthread_t thread_id;
 
-                thread_args* args = (thread_args*)malloc(sizeof(thread_args));
-                logIT(LOG_DEBUG, "main: device: %s", device);
-                strncpy(args->device, device, 20);
+                thread_args* args = new thread_args();
+                logIT(LOG_DEBUG, "main: device: %s", device.c_str());
                 args->sock_fd = sockfd;
 
                 if (pthread_create(&thread_id, NULL, connection_handler, (void*)args) < 0)
@@ -978,9 +755,6 @@ int main(int argc, char* argv[])
                 logIT(LOG_ERR, "Fehler bei Verbindungsaufbau");
         }
     }
-
-    if (*cmdfile)
-        readCmdFile(cmdfile, result, &resultLen, device);
 
     close(fd);
     close(pidFD);

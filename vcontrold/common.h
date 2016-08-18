@@ -4,7 +4,7 @@
 #include <cstdlib>
 
 /* Deklarationen */
-int initLog(int useSyslog, char* logfile, int debugSwitch);
+int initLog(int useSyslog, const char* logfile, int debugSwitch);
 void logIT(int logclass, const char* string, ...);
 char hex2chr(char* hex);
 size_t char2hex(char* outString, const char* charPtr, size_t len);

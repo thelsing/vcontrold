@@ -5,7 +5,6 @@
 
 int openSocket(int tcpport);
 int listenToSocket(int listenfd, short(*checkP)(char*));
-int openCliSocket(char* host, int port, int noTCPdelay);
 void closeSocket(int sockfd);
 
 ssize_t	writen(int fd, const void* vptr, size_t n);

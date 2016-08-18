@@ -1,6 +1,7 @@
 #ifndef XMLCONFIG_H
 #define XMLCONFIG_H
 
+#include <string>
 #include <arpa/inet.h>
 
 
@@ -9,7 +10,6 @@ typedef struct protocol* protocolPtr;
 typedef struct macro* macroPtr;
 typedef struct command* commandPtr;
 typedef struct compile* compilePtr;
-typedef struct device* devicePtr;
 typedef struct icmd* icmdPtr;
 typedef struct allow* allowPtr;
 
@@ -40,12 +40,12 @@ typedef struct compile
 
 typedef struct config
 {
-    char* tty;
+    std::string tty;
     int port;
-    char* logfile;
-    char* devID;
-    devicePtr devPtr;
+    std::string logfile;
     allowPtr aPtr;
+    std::string protocolId;
+    protocolPtr protoPtr;
     int syslog;
     int debug;
 } Config;
@@ -58,15 +58,6 @@ typedef struct protocol
     icmdPtr icPtr;
     protocolPtr next;
 } Protocol;
-
-typedef struct device
-{
-    char* name;
-    char* id;
-    commandPtr cmdPtr;
-    protocolPtr protoPtr;
-    devicePtr next;
-} Device;
 
 typedef struct macro
 {
@@ -115,7 +106,6 @@ typedef struct command
     char* send;
     char* addr;
     char* errStr;
-    char* precmd;
     Parameter parameter;
     Conversion conversion;
     double conversionFactor;

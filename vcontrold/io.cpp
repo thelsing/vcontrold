@@ -40,24 +40,7 @@ void closeDevice(int fd)
 
 int openDevice(char* device)
 {
-    /* wir unterscheiden hier TTY und Socket Verbindung */
-    /* Socket: kein / am Anfang und ein : */
-    int fd;
-    char* dptr;
-
-    if (device[0] != '/' && (dptr = strchr(device, ':')))
-    {
-        char host[MAXBUF];
-        int port;
-        port = atoi(dptr + 1);
-        /* dptr-device liefert die Laenge des Hostes */
-        bzero(host, sizeof(host));
-        strncpy(host, device, (size_t)(dptr - device));
-        /* 3. Parameter ==1 --->noTCPDelay wird gesetzt */
-        fd = openCliSocket(host, port, 1);
-    }
-    else
-        fd = opentty(device);
+    int fd = opentty(device);
 
     if (fd < 0)
     {
@@ -65,7 +48,7 @@ int openDevice(char* device)
         return (-1);
     }
 
-    return (fd);
+    return fd;
 }
 
 

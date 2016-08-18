@@ -23,19 +23,6 @@
 #include "framer.h"
 
 
-/* externe Variablen */
-extern FILE* iniFD; /* fuer das Anlegen des Sim. INI Files */
-
-
-void* getUnit(char* str)
-{
-    /* wir parsen die Eingabe nach einer bekannten Unit*/
-    /* und geben einen Zeiger auf die Struktur zurueck */
-    return (NULL);
-}
-
-
-
 int parseLine(char* line, char* hex, int* hexlen, char* uSPtr, ssize_t uSPtrLen)
 {
     int token = 0;
@@ -148,17 +135,12 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
     compilePtr cmpPtr = cmdPtr->cmpPtr;
     char string[256];
     char result[MAXBUF];
-    char simIn[500];
-    char simOut[500];
     size_t len;
     compilePtr cPtr = cmpPtr;
     unsigned long etime;
     char out_buff[1024];
     int _len = 0;
     int retry = cmdPtr->retry;
-
-    bzero(simIn, sizeof(simIn));
-    bzero(simOut, sizeof(simOut));
 
     /* wir wandeln zuerst die zu sendenen Bytes, nicht daas wir mittendrin abbrechen muessen */
     if (!supressUnit)
@@ -205,8 +187,6 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
 
                     bzero(string, sizeof(string));
                     char2hex(string, cmpPtr->send, cmpPtr->len);
-                    strcat(simIn, string);
-                    strcat(simIn, " ");
                     break;
 
                 case SEND:
@@ -229,17 +209,8 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                         return (-1);
                     }
 
-                    if (iniFD && *simIn && *simOut)   /* wir haben schon was gesendet und empfangen, das geben wir nun aus */
-                    {
-                        fprintf(iniFD, "%s= %s\n", simOut, simIn);
-                        bzero(simOut, sizeof(simOut));
-                        bzero(simIn, sizeof(simIn));
-                    }
-
                     bzero(string, sizeof(string));
                     char2hex(string, out_buff, _len);
-                    strcat(simOut, string);
-                    strcat(simOut, " ");
                     break;
 
                 case RECV:
@@ -292,8 +263,6 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
 
                     bzero(string, sizeof(string));
                     char2hex(string, recvBuf, cmpPtr->len);
-                    strcat(simIn, string);
-                    strcat(simIn, " ");
                     /* falls wir eine Unit haben (==uPtr) rechnen wir den
                      * empfangenen Wert um, und geben den umgerechneten Wert auch in uPtr zurueck */
                     bzero(result, sizeof(result));
@@ -319,15 +288,8 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
 
                         strncpy(recvBuf, result, recvLen);
 
-                        if (iniFD && *simIn && *simOut) /* wir haben gesendet und empfangen, das geben wir nun aus */
-                            /* fprintf(iniFD,"%s= %s ;%s\n",simOut,simIn,result); */
-                            fprintf(iniFD, "%s= %s \n", simOut, simIn);
-
                         return (0); /* 0==geawandelt nach unit */
                     }
-
-                    if (iniFD && *simIn && *simOut)  /* wir haben gesendet und empfangen, das geben wir nun aus */
-                        fprintf(iniFD, "%s= %s \n", simOut, simIn);
 
                     return (cmpPtr->len);
                     break;
@@ -355,8 +317,6 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                         }
 
                         char2hex(string, sendBuf, sendLen);
-                        strcat(simOut, string);
-                        strcat(simOut, " ");
                     }
                     /* es ist eine Einheit definiert soll benutzt werden und wir haben das oben schon gewandelt */
                     else if (cmpPtr->len)
@@ -372,11 +332,6 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
 
                         bzero(string, sizeof(string));
                         char2hex(string, cmpPtr->send, cmpPtr->len);
-                        strcat(simOut, string);
-                        strcat(simOut, " ");
-                        /*					free(cmpPtr->send);
-                                            cmpPtr->len=0;
-                        */
                     }
 
                     break;
@@ -741,18 +696,3 @@ compilePtr buildByteCode(commandPtr cPtr)
     cPtr->cmpPtr = cmpStartPtr;
     return (cmpStartPtr);
 }
-
-void compileCommand(devicePtr dPtr)
-{
-
-    if (!dPtr)
-        return;
-
-    if (dPtr->next)
-        compileCommand(dPtr->next);
-
-    logIT(LOG_INFO, "Expandiere Kommandos fuer Device %s", dPtr->id);
-    expand(dPtr->cmdPtr, dPtr->protoPtr);
-    buildByteCode(dPtr->cmdPtr);
-}
-

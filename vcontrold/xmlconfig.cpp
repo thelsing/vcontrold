@@ -21,7 +21,6 @@
 
 /* globale Variablen */
 protocolPtr protoPtr = NULL;
-devicePtr devPtr = NULL;
 configPtr cfgPtr = NULL;
 commandPtr cmdPtr = NULL;
 
@@ -189,82 +188,24 @@ void removeCommandList(commandPtr ptr)
         removeCompileList(ptr->cmpPtr);
         free(ptr->send);
 
-        if (ptr->nodeType > 0)   /* wurde aus der xml Datei gelesen */
-        {
-            if (ptr->addr)
-                free(ptr->addr);
+        if (ptr->addr)
+            free(ptr->addr);
 
-            if (ptr->precmd)
-                free(ptr->precmd);
+        if (ptr->pcmd)
+            free(ptr->pcmd);
 
-            if (ptr->pcmd)
-                free(ptr->pcmd);
+        if (ptr->errStr)
+            free(ptr->errStr);
 
-            if (ptr->errStr)
-                free(ptr->errStr);
+        if (ptr->name)
+            free(ptr->name);
 
-            if (ptr->nodeType == 1)   /* Originalkonoten */
-            {
-                if (ptr->name)
-                    free(ptr->name);
-
-                if (ptr->description)
-                    free(ptr->description);
-            }
-        }
+        if (ptr->description)
+            free(ptr->description);
 
         free(ptr);
     }
 }
-
-devicePtr newDeviceNode(devicePtr ptr)
-{
-    devicePtr nptr;
-
-    if (ptr && ptr->next)
-        return (newDeviceNode(ptr->next));
-
-    nptr = (devicePtr)calloc(1, sizeof(Device));
-
-    if (!nptr)
-    {
-        fprintf(stderr, "malloc gescheitert\n");
-        exit(1);
-    }
-
-    if (ptr)
-        ptr->next = nptr;
-
-    nptr->next = NULL;
-    return (nptr);
-}
-
-devicePtr getDeviceNode(devicePtr ptr, char* id)
-{
-    if (!ptr)
-        return (NULL);
-
-    if (strcmp(ptr->id, id) != 0)
-        return (getDeviceNode(ptr->next, id));
-
-    return (ptr);
-}
-
-void removeDeviceList(devicePtr ptr)
-{
-    if (ptr && ptr->next)
-        removeDeviceList(ptr->next);
-
-    if (ptr)
-    {
-        removeCommandList(ptr->cmdPtr);
-        free(ptr->name);
-        free(ptr->id);
-        free(ptr);
-    }
-}
-
-
 
 icmdPtr newIcmdNode(icmdPtr ptr)
 {
@@ -298,10 +239,6 @@ icmdPtr getIcmdNode(icmdPtr ptr, const char* name)
 
     return (ptr);
 }
-
-
-
-
 
 allowPtr getAllowNode(allowPtr ptr, const in_addr_t testIP)
 {
@@ -346,8 +283,6 @@ void removeAllowList(allowPtr ptr)
         free(ptr);
     }
 }
-
-
 
 void printNode(xmlNodePtr ptr)
 {
@@ -421,11 +356,11 @@ configPtr parseConfig(xmlNodePtr cur)
     allowPtr aPtr = 0;
     char ip[16];
 
-    cfgPtr = (configPtr)calloc(1, sizeof(Config));
+    cfgPtr = (configPtr)malloc(sizeof(Config));
     cfgPtr->port = 0;
     cfgPtr->syslog = 0;
     cfgPtr->debug = 0;
-    cfgPtr->aPtr = NULL;
+    cfgPtr->aPtr = 0;
 
     while (cur)
     {
@@ -449,20 +384,16 @@ configPtr parseConfig(xmlNodePtr cur)
             prevPtr = cur;
             cur = cur->children;
         }
-        else if (strstr((char*)cur->name, "device"))
+        else if (strcmp((char*)cur->name, "protocol") == 0)
         {
-            chrPtr = getPropertyNode(cur->properties, (xmlChar*)"ID");
-            logIT(LOG_INFO, "     Device ID=%s", cfgPtr->devID);
+            chrPtr = getTextNode(cur);
+            logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
 
             if (chrPtr)
-            {
-                cfgPtr->devID = (char*)calloc(strlen(chrPtr) + 1, sizeof(char));
-                strcpy(cfgPtr->devID, chrPtr);
-            }
+                cfgPtr->protocolId = std::string(chrPtr);
             else
-                nullIT(&cfgPtr->devID);
+                cfgPtr->protocolId = std::string("");
 
-            cur = cur->next;
         }
 
         else if (serialFound && strstr((char*)cur->name, "tty"))
@@ -471,15 +402,10 @@ configPtr parseConfig(xmlNodePtr cur)
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
 
             if (chrPtr)
-            {
-                cfgPtr->tty = (char*)calloc(strlen(chrPtr) + 1, sizeof(char));
-                strcpy(cfgPtr->tty, chrPtr);
-            }
+                cfgPtr->tty = std::string(chrPtr);
             else
-                nullIT(&cfgPtr->devID);
+                cfgPtr->tty = std::string("");
 
-            (cur->next &&
-             (!(cur->next->type == XML_TEXT_NODE) || cur->next->next)) ? (cur = cur->next) : (cur = prevPtr->next);
         }
         else if (netFound && strstr((char*)cur->name, "port"))
         {
@@ -489,8 +415,6 @@ configPtr parseConfig(xmlNodePtr cur)
             if (chrPtr)
                 cfgPtr->port = atoi(chrPtr);
 
-            (cur->next &&
-             (!(cur->next->type == XML_TEXT_NODE) || cur->next->next)) ? (cur = cur->next) : (cur = prevPtr->next);
         }
         else if (netFound && strstr((char*)cur->name, "allow"))
         {
@@ -548,9 +472,6 @@ configPtr parseConfig(xmlNodePtr cur)
 
                 logIT(LOG_INFO, "     Allow IP:%s Size:/%d", ip, size);
             }
-
-            (cur->next &&
-             (!(cur->next->type == XML_TEXT_NODE) || cur->next->next)) ? (cur = cur->next) : (cur = prevPtr->next);
         }
         else if (logFound && strstr((char*)cur->name, "file"))
         {
@@ -558,34 +479,26 @@ configPtr parseConfig(xmlNodePtr cur)
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
 
             if (chrPtr)
-            {
-                cfgPtr->logfile = (char*)calloc(strlen(chrPtr) + 1, sizeof(char));
-                strcpy(cfgPtr->logfile, chrPtr);
-            }
+                cfgPtr->logfile = std::string(chrPtr);
             else
-                nullIT(&cfgPtr->devID);
-
-            (cur->next &&
-             (!(cur->next->type == XML_TEXT_NODE) || cur->next->next)) ? (cur = cur->next) : (cur = prevPtr->next);
+                cfgPtr->logfile = std::string("");
         }
         else if (logFound && strstr((char*)cur->name, "syslog"))
         {
             chrPtr = getTextNode(cur);
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
             ((*chrPtr == 'y') || (*chrPtr == '1')) ? (cfgPtr->syslog = 1) : (cfgPtr->syslog = 0);
-            (cur->next &&
-             (!(cur->next->type == XML_TEXT_NODE) || cur->next->next)) ? (cur = cur->next) : (cur = prevPtr->next);
         }
         else if (logFound && strstr((char*)cur->name, "debug"))
         {
             chrPtr = getTextNode(cur);
             ((*chrPtr == 'y') || (*chrPtr == '1')) ? (cfgPtr->debug = 1) : (cfgPtr->debug = 0);
-            (cur->next &&
-             (!(cur->next->type == XML_TEXT_NODE) || cur->next->next)) ? (cur = cur->next) : (cur = prevPtr->next);
         }
+
+        if (cur->next && (cur->next->type != XML_TEXT_NODE || cur->next->next))
+            cur = cur->next;
         else
-            (cur->next &&
-             (!(cur->next->type == XML_TEXT_NODE) || cur->next->next)) ? (cur = cur->next) : (cur = prevPtr->next);
+            cur = prevPtr->next;
     }
 
     return (cfgPtr);
@@ -740,7 +653,7 @@ Parameter parseParameterEnum(const std::string tagContent)
 }
 
 
-commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
+commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr)
 {
     commandPtr cStartPtr = NULL;
     char* command;
@@ -782,8 +695,6 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
 
                 if (!cStartPtr)
                     cStartPtr = cPtr;
-
-                cPtr->nodeType = 1; /* keine Kopie, brauchen wir beim loeschen */
 
                 if (command)
                 {
@@ -920,19 +831,6 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
             else
                 nullIT(&cPtr->errStr);
         }
-        else if (commandFound && (strcmp((char*)cur->name, "precommand") == 0))
-        {
-            chrPtr = getTextNode(cur);
-            logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
-
-            if (chrPtr)
-            {
-                cPtr->precmd = (char*)calloc(strlen(chrPtr) + 1, sizeof(char));
-                strcpy(cPtr->precmd, chrPtr);
-            }
-            else
-                nullIT(&cPtr->precmd);
-        }
         else if (commandFound && (strcmp((char*)cur->name, "description") == 0))
         {
             chrPtr = getTextNode(cur);
@@ -968,8 +866,7 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr, devicePtr dePtr)
                 cPtr->blockLength = atoi(chrPtr);
         }
 
-        if (cur->next &&
-            (!(cur->next->type == XML_TEXT_NODE) || cur->next->next))
+        if (cur->next && (cur->next->type != XML_TEXT_NODE || cur->next->next))
             cur = cur->next;
         else if (prevPtr)
             cur = prevPtr->next;
@@ -1066,80 +963,6 @@ icmdPtr parseICmd(xmlNodePtr cur)
     }
 
     return (icStartPtr);
-}
-
-devicePtr parseDevice(xmlNodePtr cur, protocolPtr pPtr)
-{
-    devicePtr dPtr = 0;
-    devicePtr dStartPtr = 0;
-    char* proto = 0;
-    char* name = 0;
-    char* id = 0;
-    xmlNodePtr prevPtr = 0;
-
-    while (cur)
-    {
-        logIT(LOG_INFO, "DEVICE: (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, cur->content);
-
-        if (cur->type == XML_TEXT_NODE)
-        {
-            cur = cur->next;
-            continue;
-        }
-
-        if (strstr((char*)cur->name, "device"))
-        {
-            name = getPropertyNode(cur->properties, (xmlChar*)"name");
-            id = getPropertyNode(cur->properties, (xmlChar*)"ID");
-            proto = getPropertyNode(cur->properties, (xmlChar*)"protocol");
-
-            if (proto)   /* neues Protocol gelesen */
-            {
-                logIT(LOG_INFO, "    Neues Device: name=%s ID=%s proto=%s", name, id, proto);
-                dPtr = newDeviceNode(dStartPtr);
-
-                if (!dStartPtr)
-                    dStartPtr = dPtr; /* Anker merken */
-
-                if (name)
-                {
-                    dPtr->name = (char*)calloc(strlen(name) + 1, sizeof(char));
-                    strcpy(dPtr->name, name);
-                }
-                else
-                    nullIT(&dPtr->name);
-
-                if (id)
-                {
-                    dPtr->id = (char*)calloc(strlen(id) + 1, sizeof(char));
-                    strcpy(dPtr->id, id);
-                }
-                else
-                    nullIT(&dPtr->id);
-
-                if (!(dPtr->protoPtr = getProtocolNode(pPtr, proto)))
-                {
-                    logIT(LOG_ERR, "Protokoll %s nicht definiert", proto);
-                    return (NULL);
-                }
-
-            }
-            else
-            {
-                logIT(LOG_ERR, "Fehler beim parsen device");
-                return (NULL);
-            }
-
-            prevPtr = cur;
-            cur = cur->next;
-        }
-        else
-            (cur->next &&
-             (!(cur->next->type == XML_TEXT_NODE) || cur->next->next)) ? (cur = cur->next) : (cur = prevPtr->next);
-    }
-
-    return (dStartPtr);
-
 }
 
 protocolPtr parseProtocol(xmlNodePtr cur)
@@ -1259,11 +1082,8 @@ int parseXMLFile(const char* filename)
     xmlNodePtr curStart = 0;
     xmlNodePtr prevPtr = 0;
     xmlNsPtr ns = 0;
-    devicePtr dPtr = 0;
     commandPtr cPtr = 0;
-    commandPtr ncPtr = 0;
     protocolPtr TprotoPtr = 0;
-    devicePtr TdevPtr = 0;
     commandPtr TcmdPtr = 0;
     configPtr TcfgPtr = 0;
 
@@ -1376,18 +1196,10 @@ int parseXMLFile(const char* filename)
         }
         else if (strstr((char*)cur->name, "commands"))
         {
-            if (!(TcmdPtr = parseCommand(cur->children, NULL, TdevPtr)))
+            if (!(TcmdPtr = parseCommand(cur->children, NULL)))
                 return (0);
 
             /* (cur->next && cur->next->next) ? (cur=cur->next) : (cur=prevPtr->next); */
-            (cur->next) ? (cur = cur->next) : (cur = prevPtr->next);
-            continue;
-        }
-        else if (strstr((char*)cur->name, "devices"))
-        {
-            if (!(TdevPtr = parseDevice(cur->children, TprotoPtr)))
-                return (0);
-
             (cur->next) ? (cur = cur->next) : (cur = prevPtr->next);
             continue;
         }
@@ -1429,46 +1241,14 @@ int parseXMLFile(const char* filename)
 
         //cPtr->blockLength = cPtr->bytePosition + cPtr->byteLength;
 
-        dPtr = TdevPtr;
-
-        while (dPtr)
-        {
-            if (!getCommandNode(dPtr->cmdPtr, cPtr->name))
-            {
-                /* den kennen wir nicht und kopieren die Daten */
-                logIT(LOG_INFO, "Kopiere Kommando %s nach Device %s", cPtr->name, dPtr->id);
-                ncPtr = newCommandNode(dPtr->cmdPtr);
-
-                if (!dPtr->cmdPtr)
-                    dPtr->cmdPtr = ncPtr;
-
-                ncPtr->name = cPtr->name;
-                ncPtr->pcmd = cPtr->pcmd;
-                ncPtr->addr = cPtr->addr;
-                ncPtr->errStr = cPtr->errStr;
-                ncPtr->precmd = cPtr->precmd;
-                ncPtr->description = cPtr->description;
-                ncPtr->blockLength = cPtr->blockLength;
-                ncPtr->bytePosition = cPtr->bytePosition;
-                ncPtr->byteLength = cPtr->byteLength;
-                ncPtr->shortDescription = cPtr->shortDescription;
-                ncPtr->bitPosition = cPtr->bitPosition;
-                ncPtr->bitLength = cPtr->bitLength;
-                ncPtr->conversion = cPtr->conversion;
-                ncPtr->parameter = cPtr->parameter;
-            }
-
-            dPtr = dPtr->next;
-        }
-
         cPtr = cPtr->next;
     }
 
-    /* wir suchen das default Devive  */
+    /* wir suchen das protocol  */
 
-    if (!(TcfgPtr->devPtr = getDeviceNode(TdevPtr, TcfgPtr->devID)))
+    if (!(TcfgPtr->protoPtr = getProtocolNode(TprotoPtr, TcfgPtr->protocolId.c_str())))
     {
-        logIT(LOG_ERR, "Device %s nicht definiert\n", TcfgPtr->devID);
+        logIT(LOG_ERR, "Protocol %s nicht definiert\n", TcfgPtr->protocolId.c_str());
         return (0);
     }
 
@@ -1479,7 +1259,6 @@ int parseXMLFile(const char* filename)
     freeAllLists();
 
     protoPtr = TprotoPtr;
-    devPtr = TdevPtr;
     cmdPtr = TcmdPtr;
     cfgPtr = TcfgPtr;
 
@@ -1493,17 +1272,12 @@ int parseXMLFile(const char* filename)
 void freeAllLists()
 {
     removeProtocolList(protoPtr);
-    removeDeviceList(devPtr);
     removeCommandList(cmdPtr);
     protoPtr = NULL;
-    devPtr = NULL;
     cmdPtr = NULL;
 
     if (cfgPtr)
     {
-        free(cfgPtr->tty);
-        free(cfgPtr->logfile);
-        free(cfgPtr->devID);
         removeAllowList(cfgPtr->aPtr);
         free(cfgPtr);
         cfgPtr = NULL;
