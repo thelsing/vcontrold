@@ -594,7 +594,7 @@ int framer_openDevice(const char* device, char pid)
     snprintf(string, sizeof(string), ">FRAMER: open device %s ProtocolID %02X", device, pid);
     logIT(LOG_INFO, string);
 
-    if ((fd = openDevice((char*)device)) == -1)
+    if ((fd = openDevice(device)) == -1)
         return -1;
 
     if (pid == P300_LEADIN)

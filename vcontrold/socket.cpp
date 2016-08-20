@@ -132,12 +132,11 @@ int openSocket(int tcpport)
     return listenfd;
 }
 
-
 int listenToSocket(int listenfd, short(*checkIP)(char*))
 {
     int connfd;
     struct sockaddr_storage cliaddr;
-    socklen_t               cliaddrlen = sizeof(cliaddr);
+    socklen_t cliaddrlen = sizeof(cliaddr);
     char clienthost[NI_MAXHOST];
     char clientservice[NI_MAXSERV];
 
@@ -149,6 +148,12 @@ int listenToSocket(int listenfd, short(*checkIP)(char*))
                         (struct sockaddr*) &cliaddr,
                         &cliaddrlen);
 
+        if (connfd < 0)
+        {
+            logIT(LOG_ERR, "accept failed");
+            continue;
+        }
+
         getnameinfo((struct sockaddr*) &cliaddr, cliaddrlen,
                     clienthost, sizeof(clienthost),
                     clientservice, sizeof(clientservice),
@@ -156,204 +161,20 @@ int listenToSocket(int listenfd, short(*checkIP)(char*))
 
         if (!(*checkIP)(clienthost))
         {
-            close(connfd);
+            logIT(LOG_WARNING, "denied connection from %s:%s (fd:%d)", clienthost, clientservice, connfd);
+            closeSocket(connfd);
             continue;
         }
 
-        if (connfd < 0)
-        {
-            logIT(LOG_NOTICE, "accept auf host %s: port %s", clienthost, clientservice);
-            close(connfd);
-            continue;
-        }
-
-        logIT(LOG_NOTICE, "Client verbunden %s:%s (FD:%d)", clienthost, clientservice, connfd);
+        logIT(LOG_NOTICE, "client connection established %s:%s (fd:%d)", clienthost, clientservice, connfd);
         return connfd;
     }
 }
 
 void closeSocket(int sockfd)
 {
-    logIT(LOG_INFO, "Verbindung beendet (fd:%d)", sockfd);
+    logIT(LOG_INFO, "connection closed (fd:%d)", sockfd);
     close(sockfd);
 }
 
-/* Stuff aus Unix Network Programming Vol 1*/
 
-/* include writen */
-
-ssize_t						/* Write "n" bytes to a descriptor. */
-writen(int fd, const void* vptr, size_t n)
-{
-    ssize_t		nleft;
-    ssize_t		nwritten;
-    const char*	ptr;
-
-    ptr = (char*)vptr;
-    nleft = n;
-
-    while (nleft > 0)
-    {
-        if ((nwritten = write(fd, ptr, nleft)) <= 0)
-        {
-            if (errno == EINTR)
-                nwritten = 0;		/* and call write() again */
-            else
-                return (-1);			/* error */
-        }
-
-        nleft -= nwritten;
-        ptr += nwritten;
-    }
-
-    return (ssize_t)n;
-}
-/* end writen */
-
-ssize_t
-Writen(int fd, void* ptr, size_t nbytes)
-{
-    if (writen(fd, ptr, nbytes) != (ssize_t)nbytes)
-    {
-        logIT(LOG_ERR, "Fehler beim schreiben auf socket");
-        return (0);
-    }
-
-    return (ssize_t)nbytes;
-}
-
-
-/* include readn */
-
-ssize_t						/* Read "n" bytes from a descriptor. */
-readn(int fd, void* vptr, size_t n)
-{
-    ssize_t	nleft;
-    ssize_t	nread;
-    char*	ptr;
-
-    ptr = (char*) vptr;
-    nleft = n;
-
-    while (nleft > 0)
-    {
-        if ((nread = read(fd, ptr, nleft)) < 0)
-        {
-            if (errno == EINTR)
-                nread = 0;		/* and call read() again */
-            else
-                return (-1);
-        }
-        else if (nread == 0)
-            break;				/* EOF */
-
-#ifdef __CYGWIN__
-
-        if (nread > nleft) 				// This is a workaround for Cygwin.
-            nleft = 0;					// Here cygwins read(fd,buff,count) is
-        else							// reading more than count chars! this is bad!
-            nleft -= nread;
-
-#else
-        nleft -= nread;
-#endif
-        ptr += nread;
-    }
-
-    return ((ssize_t)n) - nleft;		/* return >= 0 */
-}
-/* end readn */
-
-ssize_t
-Readn(int fd, void* ptr, size_t nbytes)
-{
-    ssize_t		n;
-
-    if ((n = readn(fd, ptr, nbytes)) < 0)
-    {
-        logIT(LOG_ERR, "Fehler beim lesen von socket");
-        return (0);
-    }
-
-    return (n);
-}
-
-
-/* include readline */
-
-static ssize_t
-my_read(int fd, char* ptr)
-{
-    static ssize_t read_cnt = 0;
-    static char*	read_ptr;
-    static char	read_buf[MAXLINE];
-
-    if (read_cnt <= 0)
-    {
-again:
-
-        if ((read_cnt = read(fd, read_buf, sizeof(read_buf))) < 0)
-        {
-            if (errno == EINTR)
-                goto again;
-
-            return (-1);
-        }
-        else if (read_cnt == 0)
-            return (0);
-
-        read_ptr = read_buf;
-    }
-
-    read_cnt--;
-    *ptr = *read_ptr++;
-    return (1);
-}
-
-ssize_t
-readline(int fd, void* vptr, size_t maxlen)
-{
-    ssize_t rc;
-    char	c, *ptr;
-
-    ptr = (char*)vptr;
-    size_t n;
-
-    for (n = 1; n < maxlen; n++)
-    {
-        if ((rc = my_read(fd, &c)) == 1)
-        {
-            *ptr++ = c;
-
-            if (c == '\n')
-                break;	/* newline is stored, like fgets() */
-        }
-        else if (rc == 0)
-        {
-            if (n == 1)
-                return (0);	/* EOF, no data read */
-            else
-                break;		/* EOF, some data was read */
-        }
-        else
-            return (-1);		/* error, errno set by read() */
-    }
-
-    *ptr = 0;	/* null terminate like fgets() */
-    return (ssize_t)n;
-}
-/* end readline */
-
-ssize_t
-Readline(int fd, void* ptr, size_t maxlen)
-{
-    ssize_t		n;
-
-    if ((n = readline(fd, ptr, maxlen)) < 0)
-    {
-        logIT(LOG_ERR, "Fehler beim lesen von socket");
-        return (0);
-    }
-
-    return (n);
-}

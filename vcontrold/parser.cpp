@@ -23,7 +23,7 @@
 #include "framer.h"
 
 
-int parseLine(char* line, char* hex, int* hexlen, char* uSPtr, ssize_t uSPtrLen)
+static int parseLine(char* line, char* hex, int* hexlen, char* uSPtr, ssize_t uSPtrLen)
 {
     int token = 0;
 
@@ -353,75 +353,6 @@ RETRY:
     return (0);
 }
 
-int execCmd(char* cmd, int fd, char* recvBuf, int recvLen)
-{
-    //char string[256];
-    char uString[100];
-    /*char *uSPtr=uString;*/
-    logIT(LOG_INFO, "Execute %s", cmd);
-    /* wir parsen die einzelnen Zeilen */
-    char hex[MAXBUF];
-    int token;
-    int hexlen = 0;
-    int t;
-    unsigned long etime;
-    token = parseLine(cmd, hex, &hexlen, uString, sizeof(uString));
-
-    /* wenn noOpen fuer debug Zwecke gesetzt ist, machen wir hier nichts */
-    switch (token)
-    {
-        case WAIT:
-            if (!waitfor(fd, hex, hexlen))
-            {
-                logIT(LOG_ERR, "Fehler wait, Abbruch");
-                return (-1);
-            }
-
-            break;
-
-        case SEND:
-            if (!my_send(fd, hex, hexlen))
-            {
-                logIT(LOG_ERR, "Fehler send, Abbruch");
-                exit(1);
-            }
-
-            break;
-
-        case RECV:
-            if (hexlen > recvLen)
-            {
-                logIT(LOG_ERR, "Recv Buffer zu klein. Ist: %d Soll %d", recvLen, hexlen);
-                hexlen = recvLen;
-            }
-
-            etime = 0;
-
-            if (receive(fd, recvBuf, hexlen, &etime) <= 0)
-            {
-                logIT(LOG_ERR, "Fehler recv, Abbruch");
-                exit(1);
-            }
-
-            logIT(LOG_INFO, "Recv: %ld ms", etime);
-            /* falls wir eine Unit haben (==uPtr) rechnen wir den
-            * 			empfangenen Wert um, und geben den umgerechneten Wert auch in uPtr zurueck */
-            return (hexlen);
-            break;
-
-        case PAUSE:
-            t = (int)hexlen / 1000;
-            logIT(LOG_INFO, "Warte %i s", t);
-            sleep(t);
-            break;
-
-        default:
-            logIT(LOG_INFO, "unbekannter Befehl: %s", cmd);
-    }
-
-    return (0);
-}
-
 compilePtr newCompileNode(compilePtr ptr)
 {
     compilePtr nptr;
@@ -472,8 +403,8 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
 
 
     /* falls keine Adresse gesetzt ist machen wir nichts */
-    if (!cPtr->addr)
-        return (0);
+    if (!cPtr->addrStr)
+        return 0;
 
 
     char eString[2000];
@@ -540,9 +471,9 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
                 /* immer zwei Byte zusammen */
                 bzero(string, sizeof(string));
 
-                for (size_t i = 0; i < strlen(cPtr->addr) - 1; i += 2)
+                for (size_t i = 0; i < strlen(cPtr->addrStr) - 1; i += 2)
                 {
-                    strncpy(ePtr, cPtr->addr + i, 2);
+                    strncpy(ePtr, cPtr->addrStr + i, 2);
                     ePtr += 2;
                     *ePtr++ = ' ';
                 }
@@ -637,7 +568,7 @@ compilePtr buildByteCode(commandPtr cPtr)
         buildByteCode(cPtr->next);
 
     /* falls keine Adresse gesetzt ist machen wir nichts */
-    if (!cPtr->addr)
+    if (!cPtr->addrStr)
         return (0);
 
     char eString[2000];

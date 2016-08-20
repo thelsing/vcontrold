@@ -127,7 +127,7 @@ void printCommands(int socketfd)
 
     while (cPtr)
     {
-        if (cPtr->addr)
+        if (cPtr->addrStr)
         {
             snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->description);
             Writen(socketfd, string, strlen(string));
@@ -201,7 +201,7 @@ commandPtr findCommand(const char* cmd)
 {
     commandPtr cPtr = getCommandNode(cmdPtr, cmd);
 
-    if (cPtr && cPtr->addr)
+    if (cPtr && cPtr->addrStr)
         return cPtr;
 
     return 0;
@@ -262,11 +262,6 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
 
     if (deviceFd < 0)
     {
-        /* As one vclient call opens the link once, all is seen a transaction
-         * This may cause trouble for telnet sessions, as the whole session is
-         * one link activity, even more commands are given within.
-         * This is related to a accept/close on a server socket
-         */
 
         if ((deviceFd = framer_openDevice(device.c_str(), cfgPtr->protoPtr->id)) == -1)
         {
@@ -349,22 +344,15 @@ int interactive(int socketfd)
     char bye[] = "good bye!\n";
     char unknown[] = "ERR: command unknown\n";
     char string[256];
-    ssize_t rcount = 0;
     short noUnit = 0;
 
     Writen(socketfd, prompt, strlen(prompt));
-    rcount = Readline(socketfd, readBuf, sizeof(readBuf));
+    std::string line;
 
-    while (rcount)
+    while (ReadLine(socketfd, &line))
     {
         try
         {
-
-            /* Steuerzeichen verdampfen */
-            /*readPtr=readBuf+strlen(readBuf); **/
-            for (char* readPtr = readBuf + rcount; iscntrl(*readPtr); readPtr--)
-                *readPtr = 0;
-
             logIT(LOG_INFO, "Befehl: %s", readBuf);
 
             /* wir trennen Kommando und evtl. Optionen am ersten Blank */
@@ -449,8 +437,6 @@ int interactive(int socketfd)
 
         if (!Writen(socketfd, prompt, strlen(prompt)))
             return 0;
-
-        rcount = Readline(socketfd, readBuf, sizeof(readBuf));
     }
 
     sendErrMsg(socketfd);

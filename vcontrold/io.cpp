@@ -1,34 +1,34 @@
-/*
- * io.c Kommunikation mit der Vito* Steuerung
- *  */
-/* $Id: io.c 34 2008-04-06 19:39:29Z marcust $ */
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+
+#include <iostream>
+#include <algorithm>
+#include <stdexcept>
+
 #include <errno.h>
 #include <signal.h>
 #include <syslog.h>
 #include <unistd.h>
 #include <termios.h>
-#include <string.h>
 #include <time.h>
 #include <setjmp.h>
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/times.h>
 #include <fcntl.h>
-
 #include <sys/time.h>
 #include <sys/ioctl.h>
 
 #include "io.h"
-#include "socket.h"
 #include "common.h"
 
 #ifdef __CYGWIN__
     /* NCC is not defined under cygwin */
     #define NCC NCCS
 #endif
+
+extern int debug;
 
 static void sig_alrm(int);
 static jmp_buf	env_alrm;
@@ -38,25 +38,11 @@ void closeDevice(int fd)
     close(fd);
 }
 
-int openDevice(char* device)
-{
-    int fd = opentty(device);
-
-    if (fd < 0)
-    {
-        /* hier kann noch Fehlerkram rein */
-        return (-1);
-    }
-
-    return fd;
-}
-
-
-int opentty(char* device)
+int openDevice(const char* device)
 {
     int fd;
 
-    logIT(LOG_LOCAL0, "konfiguriere serielle Schnittstelle %s", device);
+    logIT(LOG_INFO, "konfiguriere serielle Schnittstelle %s", device);
 
     if ((fd = open(device, O_RDWR)) < 0)
     {
@@ -109,6 +95,45 @@ int opentty(char* device)
     return (fd);
 }
 
+/* Read "n" bytes from a descriptor. */
+static ssize_t	readn(int fd, void* vptr, size_t n)
+{
+    ssize_t	nleft;
+    ssize_t	nread;
+    char*	ptr;
+
+    ptr = (char*)vptr;
+    nleft = n;
+
+    while (nleft > 0)
+    {
+        if ((nread = read(fd, ptr, nleft)) < 0)
+        {
+            if (errno == EINTR)
+                nread = 0;		/* and call read() again */
+            else
+                return (-1);
+        }
+        else if (nread == 0)
+            break;				/* EOF */
+
+#ifdef __CYGWIN__
+
+        if (nread > nleft) 				// This is a workaround for Cygwin.
+            nleft = 0;					// Here cygwins read(fd,buff,count) is
+        else							// reading more than count chars! this is bad!
+            nleft -= nread;
+
+#else
+        nleft -= nread;
+#endif
+        ptr += nread;
+    }
+
+    return ((ssize_t)n) - nleft;		/* return >= 0 */
+}
+
+
 int my_send(int fd, char* s_buf, size_t len)
 {
     char string[256];
@@ -133,10 +158,10 @@ int my_send(int fd, char* s_buf, size_t len)
         logIT(LOG_INFO, ">SEND: %02X", (int)byte);
     }
 
-    return (1);
+    return 1;
 }
 
-int receive(int fd, char* r_buf, int r_len, unsigned long* etime)
+static int receive(int fd, char* r_buf, int r_len, unsigned long* etime)
 {
     int i;
 
@@ -382,4 +407,75 @@ int waitfor(int fd, char* w_buf, int w_len)
 
     /*	logIT(LOG_INFO,"Zeichenkette erkannt"); */
     return (1);
+}
+
+/* Write "n" bytes to a descriptor. */
+ssize_t	writen(int fd, const void* vptr, size_t n)
+{
+    ssize_t		nleft;
+    ssize_t		nwritten;
+    const char*	ptr;
+
+    ptr = (char*)vptr;
+    nleft = n;
+
+    while (nleft > 0)
+    {
+        if ((nwritten = write(fd, ptr, nleft)) <= 0)
+        {
+            if (errno == EINTR)
+                nwritten = 0;		/* and call write() again */
+            else
+                return (-1);			/* error */
+        }
+
+        nleft -= nwritten;
+        ptr += nwritten;
+    }
+
+    return (ssize_t)n;
+}
+
+ssize_t Writen(int fd, void* ptr, size_t nbytes)
+{
+    if (writen(fd, ptr, nbytes) != (ssize_t)nbytes)
+    {
+        logIT(LOG_ERR, "Fehler beim schreiben auf socket");
+        return (0);
+    }
+
+    return (ssize_t)nbytes;
+}
+
+bool ReadLine(int fd, std::string* line)
+{
+    // We read-ahead, so we store in static buffer
+    // what we already read, but not yet returned by ReadLine.
+    static std::string buffer;
+
+    // Do the real reading from fd until buffer has '\n'.
+    std::string::iterator pos = buffer.begin();
+
+    while ((pos = find(pos, buffer.end(), '\n')) == buffer.end())
+    {
+        char buf[3];
+        int n = read(fd, buf, sizeof(buf) - 1);
+
+        if (n == 0)
+            return false;
+
+        if (n == -1)
+            throw std::runtime_error("ReadLine error");
+
+        buf[n] = 0;
+
+        n = buffer.size();
+        buffer += buf;
+        pos = buffer.begin() + n;
+    }
+
+    // Split the buffer around '\n' found and return first part.
+    *line = std::string(buffer.begin(), pos);
+    buffer = std::string(pos + 1, buffer.end());
+    return true;
 }

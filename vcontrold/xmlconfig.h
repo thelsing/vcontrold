@@ -104,7 +104,8 @@ typedef struct command
     char* shortDescription;
     char* pcmd;
     char* send;
-    char* addr;
+    uint16_t addr;
+    char* addrStr;
     char* errStr;
     Parameter parameter;
     Conversion conversion;
@@ -117,7 +118,6 @@ typedef struct command
     char bitLength;
     int retry;
     unsigned short recvTimeout;
-    char nodeType; /* 0==alles kopiert 1==alles Orig. 2== nur Adresse, unit len orig. */
     compilePtr cmpPtr;
     char* description;
     commandPtr next;

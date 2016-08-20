@@ -190,8 +190,8 @@ void removeCommandList(commandPtr ptr)
         removeCompileList(ptr->cmpPtr);
         free(ptr->send);
 
-        if (ptr->addr)
-            free(ptr->addr);
+        if (ptr->addrStr)
+            free(ptr->addrStr);
 
         if (ptr->pcmd)
             free(ptr->pcmd);
@@ -732,11 +732,12 @@ commandPtr parseCommand(xmlNodePtr cur, commandPtr cPtr)
 
             if (chrPtr)
             {
-                cPtr->addr = (char*)calloc(strlen(chrPtr) + 1, sizeof(char));
-                strcpy(cPtr->addr, chrPtr);
+                cPtr->addr = (uint16_t)std::stoul(chrPtr, 0, 16);
+                cPtr->addrStr = (char*)calloc(strlen(chrPtr) + 1, sizeof(char));
+                strcpy(cPtr->addrStr, chrPtr);
             }
             else
-                nullIT(&cPtr->addr);
+                nullIT(&cPtr->addrStr);
         }
         else if (commandFound && (strcmp((char*)cur->name, "bytePosition") == 0))
         {
