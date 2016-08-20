@@ -116,7 +116,7 @@ reload: Neu-Laden der XML Konfiguration\n \
 unit on|off: Wandlung des Ergebnisses lsut definierter Unit an/aus\n \
 version: Zeigt die Versionsnummer an\n \
 quit: beendet die Verbindung\n";
-    Writen(socketfd, string, strlen(string));
+    WriteString(socketfd, string);
 }
 
 void printCommands(int socketfd)
@@ -130,7 +130,7 @@ void printCommands(int socketfd)
         if (cPtr->addrStr)
         {
             snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->description);
-            Writen(socketfd, string, strlen(string));
+            WriteString(socketfd, string);
         }
 
         cPtr = cPtr->next;
@@ -157,7 +157,7 @@ void printCommandDetails(char* readBuf, int socketfd)
         {
             bzero(string, sizeof(string));
             snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->send);
-            Writen(socketfd, string, strlen(string));
+            WriteString(socketfd, string);
             /* Error String definiert */
             char buf[MAXBUF];
             bzero(buf, sizeof(buf));
@@ -165,28 +165,28 @@ void printCommandDetails(char* readBuf, int socketfd)
             if (cPtr->errStr && char2hex(buf, cPtr->errStr, cPtr->blockLength))
             {
                 snprintf(string, sizeof(string), "\tError bei (Hex): %s", buf);
-                Writen(socketfd, string, strlen(string));
+                WriteString(socketfd, string);
             }
 
             /* recvTimeout ?*/
             if (cPtr->recvTimeout)
             {
                 snprintf(string, sizeof(string), "\tRECV Timeout: %d ms\n", cPtr->recvTimeout);
-                Writen(socketfd, string, strlen(string));
+                WriteString(socketfd, string);
             }
 
             /* Retry definiert ? */
             if (cPtr->retry)
             {
                 snprintf(string, sizeof(string), "\tRetry: %d\n", cPtr->retry);
-                Writen(socketfd, string, strlen(string));
+                WriteString(socketfd, string);
             }
         }
         else
         {
             bzero(string, sizeof(string));
             snprintf(string, sizeof(string), "ERR: command %s unbekannt\n", readPtr);
-            Writen(socketfd, string, strlen(string));
+            WriteString(socketfd, string);
         }
     }
     catch (std::exception& e)
@@ -346,7 +346,7 @@ int interactive(int socketfd)
     char string[256];
     short noUnit = 0;
 
-    Writen(socketfd, prompt, strlen(prompt));
+    WriteString(socketfd, prompt);
     std::string line;
 
     while (ReadLine(socketfd, &line))
@@ -373,7 +373,7 @@ int interactive(int socketfd)
                 printHelp(socketfd);
             else if (strcmp(cmd, "quit") == 0)
             {
-                Writen(socketfd, bye, strlen(bye));
+                WriteString(socketfd, bye);
                 return 1;
             }
             else if (strcmp(cmd, "debug") == 0)
@@ -397,7 +397,7 @@ int interactive(int socketfd)
                 else
                     snprintf(string, sizeof(string), "Laden von XMLFile %s gescheitert, nutze alte Konfig\n", xmlfile);
 
-                Writen(socketfd, string, strlen(string));
+                WriteString(socketfd, string);
             }
             else if (strcmp(cmd, "commands") == 0)
                 printCommands(socketfd);
@@ -405,28 +405,28 @@ int interactive(int socketfd)
             else if (strcmp(cmd, "protocol") == 0)
             {
                 snprintf(string, sizeof(string), "%s\n", cfgPtr->protoPtr->name);
-                Writen(socketfd, string, strlen(string));
+                WriteString(socketfd, string);
             }
             else if (strcmp(cmd, "version") == 0)
             {
                 snprintf(string, sizeof(string), "Version: %s\n", VERSION_DAEMON);
-                Writen(socketfd, string, strlen(string));
+                WriteString(socketfd, string);
             }
             else if (strcmp(cmd, "bulkexec") == 0)
             {
                 std::string result = bulkExec(para, noUnit) + "\n";
-                Writen(socketfd, (void*)result.c_str(), result.length());
+                WriteString(socketfd, result);
             }
             else if (commandPtr cptr = findCommand(cmd))
             {
                 std::string result = runCommand(cptr, para, noUnit) + "\n";
-                Writen(socketfd, (void*)result.c_str(), result.length());
+                WriteString(socketfd, result);
             }
             else if (strcmp(readBuf, "detail") == 0)
                 printCommandDetails(readBuf, socketfd);
 
             else if (*readBuf)
-                Writen(socketfd, unknown, strlen(unknown));
+                WriteString(socketfd, unknown);
         }
         catch (std::exception& e)
         {
@@ -434,9 +434,7 @@ int interactive(int socketfd)
         }
 
         sendErrMsg(socketfd);
-
-        if (!Writen(socketfd, prompt, strlen(prompt)))
-            return 0;
+        WriteString(socketfd, prompt);
     }
 
     sendErrMsg(socketfd);
@@ -466,7 +464,16 @@ static void sigPipeHandler(int signo)
 void* connection_handler(void* voidArgs)
 {
     std::shared_ptr<thread_args> args((thread_args*)voidArgs);
-    interactive(args->sock_fd);
+
+    try
+    {
+        interactive(args->sock_fd);
+    }
+    catch (std::exception& e)
+    {
+        logIT(LOG_ERR, "%s", e.what());
+    }
+
     closeSocket(args->sock_fd);
     return 0;
 }

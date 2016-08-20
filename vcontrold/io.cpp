@@ -133,7 +133,6 @@ static ssize_t	readn(int fd, void* vptr, size_t n)
     return ((ssize_t)n) - nleft;		/* return >= 0 */
 }
 
-
 int my_send(int fd, char* s_buf, size_t len)
 {
     char string[256];
@@ -148,8 +147,8 @@ int my_send(int fd, char* s_buf, size_t len)
 
     tcflush(fd, TCIFLUSH);
 
-    /* wir benutzen die Socket feste Vairante aus socket.c */
-    writen(fd, s_buf, len);
+    std::vector<uint8_t> bytes(s_buf, s_buf + len);
+    WriteBytes(fd, bytes);
 
     for (size_t i = 0; i < len; i++)
     {
@@ -409,42 +408,37 @@ int waitfor(int fd, char* w_buf, int w_len)
     return (1);
 }
 
-/* Write "n" bytes to a descriptor. */
-ssize_t	writen(int fd, const void* vptr, size_t n)
+template <typename T>
+void Write(int fd, T bytes)
 {
-    ssize_t		nleft;
-    ssize_t		nwritten;
-    const char*	ptr;
+    ssize_t	left = bytes.size();
+    ssize_t	idx = 0;
 
-    ptr = (char*)vptr;
-    nleft = n;
-
-    while (nleft > 0)
+    while (left > 0)
     {
-        if ((nwritten = write(fd, ptr, nleft)) <= 0)
+        ssize_t written = write(fd, &bytes[idx], left);
+
+        if (written <= 0)
         {
             if (errno == EINTR)
-                nwritten = 0;		/* and call write() again */
+                continue;
             else
-                return (-1);			/* error */
+                throw std::runtime_error("error in Write<T>");
         }
 
-        nleft -= nwritten;
-        ptr += nwritten;
+        left -= written;
+        idx += written;
     }
-
-    return (ssize_t)n;
 }
 
-ssize_t Writen(int fd, void* ptr, size_t nbytes)
+void WriteBytes(int fd, const std::vector<uint8_t> bytes)
 {
-    if (writen(fd, ptr, nbytes) != (ssize_t)nbytes)
-    {
-        logIT(LOG_ERR, "Fehler beim schreiben auf socket");
-        return (0);
-    }
+    Write(fd, bytes);
+}
 
-    return (ssize_t)nbytes;
+void WriteString(int fd, const std::string str)
+{
+    Write(fd, str);
 }
 
 bool ReadLine(int fd, std::string* line)

@@ -2,17 +2,18 @@
 #define IO_H
 
 #include <string>
+#include <vector>
 #include <cstdlib>
 
 int my_send(int fd, char* s_buf, size_t len);
 size_t receive_nb(int fd, char* r_buf, size_t r_len, unsigned long* etime);
 int waitfor(int fd, char* w_buf, int w_len);
+
 int openDevice(const char* device);
 void closeDevice(int fd);
 
-ssize_t	writen(int fd, const void* vptr, size_t n);
-ssize_t Writen(int fd, void* ptr, size_t nbytes);
-
+void WriteBytes(int fd, const std::vector<uint8_t> bytes);
+void WriteString(int fd, const std::string str);
 bool ReadLine(int fd, std::string* line);
 
 #ifndef MAXBUF
