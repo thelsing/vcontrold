@@ -641,7 +641,6 @@ int main(int argc, char* argv[])
     buildByteCode(cmdPtr);
 
     int fd = 0;
-    char result[MAXBUF];
     int sid;
     int pidFD = 0;
     char str[10];

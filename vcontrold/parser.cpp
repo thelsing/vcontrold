@@ -429,7 +429,8 @@ compilePtr newCompileNode(compilePtr ptr)
     if (ptr && ptr->next)
         return (newCompileNode(ptr->next));
 
-    nptr = (compilePtr)calloc(1, sizeof(Compile));
+    nptr = (compilePtr)malloc(sizeof(Compile));
+    memset(nptr, 0, sizeof(Compile));
 
     if (!nptr)
     {

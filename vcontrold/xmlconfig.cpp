@@ -33,7 +33,8 @@ protocolPtr newProtocolNode(protocolPtr ptr)
     if (ptr && ptr->next)
         return (newProtocolNode(ptr->next));
 
-    nptr = (protocolPtr) calloc(1, sizeof(Protocol));
+    nptr = (protocolPtr) malloc(sizeof(Protocol));
+    memset(nptr, 0, sizeof(Protocol));
 
     if (!nptr)
     {
@@ -47,7 +48,7 @@ protocolPtr newProtocolNode(protocolPtr ptr)
     nptr->next = NULL;
     nptr->icPtr = NULL;
     nptr->id = 0;
-    return (nptr);
+    return nptr;
 }
 
 protocolPtr getProtocolNode(protocolPtr ptr, const char* name)
@@ -108,7 +109,8 @@ macroPtr newMacroNode(macroPtr ptr)
     if (ptr && ptr->next)
         return (newMacroNode(ptr->next));
 
-    nptr = (macroPtr)calloc(1, sizeof(Macro));
+    nptr = (macroPtr)malloc(sizeof(Macro));
+    memset(nptr, 0, sizeof(Macro));
 
     if (!nptr)
     {
@@ -214,7 +216,8 @@ icmdPtr newIcmdNode(icmdPtr ptr)
     if (ptr && ptr->next)
         return (newIcmdNode(ptr->next));
 
-    nptr = (icmdPtr)calloc(1, sizeof(iCmd));
+    nptr = (icmdPtr)malloc(sizeof(iCmd));
+    memset(nptr, 0, sizeof(iCmd));
 
     if (!nptr)
     {
@@ -258,7 +261,8 @@ allowPtr newAllowNode(allowPtr ptr)
     if (ptr && ptr->next)
         return (newAllowNode(ptr->next));
 
-    nptr = (allowPtr)calloc(1, sizeof(Allow));
+    nptr = (allowPtr)malloc(sizeof(Allow));
+    memset(nptr, 0, sizeof(Allow));
 
     if (!nptr)
     {
@@ -340,7 +344,7 @@ char* getPropertyNode(xmlAttrPtr cur, xmlChar* name)
 
 void nullIT(char** ptr)
 {
-    *ptr = (char*)calloc(1, sizeof(char));
+    *ptr = (char*)malloc(sizeof(char));
     ** ptr = '\0';
 }
 
@@ -352,15 +356,10 @@ configPtr parseConfig(xmlNodePtr cur)
     configPtr cfgPtr = 0;
     char* chrPtr = 0;
     xmlNodePtr prevPtr = 0;
-    //char string[256];
     allowPtr aPtr = 0;
     char ip[16];
 
-    cfgPtr = (configPtr)malloc(sizeof(Config));
-    cfgPtr->port = 0;
-    cfgPtr->syslog = 0;
-    cfgPtr->debug = 0;
-    cfgPtr->aPtr = 0;
+    cfgPtr = new Config();
 
     while (cur)
     {
@@ -371,18 +370,21 @@ configPtr parseConfig(xmlNodePtr cur)
             serialFound = 1;
             prevPtr = cur;
             cur = cur->children;
+            continue;
         }
         else if (strstr((char*)cur->name, "net"))
         {
             netFound = 1;
             prevPtr = cur;
             cur = cur->children;
+            continue;
         }
         else if (strstr((char*)cur->name, "logging"))
         {
             logFound = 1;
             prevPtr = cur;
             cur = cur->children;
+            continue;
         }
         else if (strcmp((char*)cur->name, "protocol") == 0)
         {
@@ -390,9 +392,9 @@ configPtr parseConfig(xmlNodePtr cur)
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
 
             if (chrPtr)
-                cfgPtr->protocolId = std::string(chrPtr);
+                cfgPtr->protocolId = chrPtr;
             else
-                cfgPtr->protocolId = std::string("");
+                cfgPtr->protocolId = "";
 
         }
 
@@ -402,9 +404,9 @@ configPtr parseConfig(xmlNodePtr cur)
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
 
             if (chrPtr)
-                cfgPtr->tty = std::string(chrPtr);
+                cfgPtr->tty = chrPtr;
             else
-                cfgPtr->tty = std::string("");
+                cfgPtr->tty = "";
 
         }
         else if (netFound && strstr((char*)cur->name, "port"))
@@ -479,9 +481,9 @@ configPtr parseConfig(xmlNodePtr cur)
             logIT(LOG_INFO, "   (%d) Node::Name=%s Type:%d Content=%s", cur->line, cur->name, cur->type, chrPtr);
 
             if (chrPtr)
-                cfgPtr->logfile = std::string(chrPtr);
+                cfgPtr->logfile = chrPtr;
             else
-                cfgPtr->logfile = std::string("");
+                cfgPtr->logfile = "";
         }
         else if (logFound && strstr((char*)cur->name, "syslog"))
         {
@@ -497,8 +499,13 @@ configPtr parseConfig(xmlNodePtr cur)
 
         if (cur->next && (cur->next->type != XML_TEXT_NODE || cur->next->next))
             cur = cur->next;
-        else
+        else if (prevPtr)
+        {
             cur = prevPtr->next;
+            prevPtr = 0;
+        }
+        else
+            cur = 0;
     }
 
     return (cfgPtr);
@@ -1279,7 +1286,7 @@ void freeAllLists()
     if (cfgPtr)
     {
         removeAllowList(cfgPtr->aPtr);
-        free(cfgPtr);
+        delete cfgPtr;
         cfgPtr = NULL;
     }
 }
