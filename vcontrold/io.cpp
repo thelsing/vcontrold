@@ -38,6 +38,44 @@ void closeDevice(int fd)
     close(fd);
 }
 
+
+std::vector<uint8_t> ReadBytes(int fd, int count)
+{
+    if (signal(SIGALRM, sig_alrm) == SIG_ERR)
+        logIT(LOG_ERR, "SIGALRM error");
+
+    if (setjmp(env_alrm) != 0)
+        throw std::runtime_error("read timeout");
+
+    std::vector<uint8_t> result(count);
+
+    alarm(TIMEOUT);
+
+    ssize_t	nleft;
+    ssize_t	nread;
+    int idx = 0;
+
+    while (nleft > 0)
+    {
+        if ((nread = read(fd, &result[idx], nleft)) < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            else
+            {
+                alarm(0);
+                throw std::runtime_error("read error");
+            }
+        }
+
+        nleft -= nread;
+        idx += nread;
+    }
+
+    alarm(0);
+    return result;
+}
+
 int openDevice(const char* device)
 {
     int fd;
@@ -95,44 +133,6 @@ int openDevice(const char* device)
     return (fd);
 }
 
-/* Read "n" bytes from a descriptor. */
-static ssize_t	readn(int fd, void* vptr, size_t n)
-{
-    ssize_t	nleft;
-    ssize_t	nread;
-    char*	ptr;
-
-    ptr = (char*)vptr;
-    nleft = n;
-
-    while (nleft > 0)
-    {
-        if ((nread = read(fd, ptr, nleft)) < 0)
-        {
-            if (errno == EINTR)
-                nread = 0;		/* and call read() again */
-            else
-                return (-1);
-        }
-        else if (nread == 0)
-            break;				/* EOF */
-
-#ifdef __CYGWIN__
-
-        if (nread > nleft) 				// This is a workaround for Cygwin.
-            nleft = 0;					// Here cygwins read(fd,buff,count) is
-        else							// reading more than count chars! this is bad!
-            nleft -= nread;
-
-#else
-        nleft -= nread;
-#endif
-        ptr += nread;
-    }
-
-    return ((ssize_t)n) - nleft;		/* return >= 0 */
-}
-
 int my_send(int fd, char* s_buf, size_t len)
 {
     char string[256];
@@ -141,7 +141,7 @@ int my_send(int fd, char* s_buf, size_t len)
     /* da tcflush nicht richtig funktioniert, verwenden wir nonblocking read */
     fcntl(fd, F_SETFL, O_NONBLOCK);
 
-    while (readn(fd, string, sizeof(string)) > 0);
+    while (read(fd, string, sizeof(string)) > 0);
 
     fcntl(fd, F_SETFL, !O_NONBLOCK);
 
@@ -158,49 +158,6 @@ int my_send(int fd, char* s_buf, size_t len)
     }
 
     return 1;
-}
-
-static int receive(int fd, char* r_buf, int r_len, unsigned long* etime)
-{
-    int i;
-
-    struct tms tms_t;
-    clock_t start, end, mid, mid1;
-    double clktck = (double)sysconf(_SC_CLK_TCK);
-    start = times(&tms_t);
-    mid1 = start;
-
-    for (i = 0; i < r_len; i++)
-    {
-        if (signal(SIGALRM, sig_alrm) == SIG_ERR)
-            logIT(LOG_ERR, "SIGALRM error");
-
-        if (setjmp(env_alrm) != 0)
-        {
-            logIT(LOG_ERR, "read timeout");
-            return (-1);
-        }
-
-        alarm(TIMEOUT);
-
-        /* wir benutzen die Socket feste Vairante aus socket.c */
-        if (readn(fd, &r_buf[i], 1) <= 0)
-        {
-            logIT(LOG_ERR, "error read tty");;
-            alarm(0);
-            return (-1);
-        }
-
-        alarm(0);
-        unsigned char byte = r_buf[i] & 255;
-        mid = times(&tms_t);
-        logIT(LOG_INFO, "<RECV: %02X (%0.1f ms)", byte, ((double)(mid - mid1) / clktck) * 1000);
-        mid1 = mid;
-    }
-
-    end = times(&tms_t);
-    *etime = (unsigned long)((double)(end - start) / clktck) * 1000;
-    return i;
 }
 
 static int setnonblock(int fd)
@@ -352,60 +309,38 @@ static void sig_alrm(int signo)
 
 int waitfor(int fd, char* w_buf, int w_len)
 {
-    int i;
-    time_t start;
-    char r_buf[MAXBUF];
     char hexString[128] = "\0";
     char dummy[3];
-    unsigned long etime;
 
-    for (i = 0; i < w_len; i++)
+    for (int i = 0; i < w_len; i++)
     {
         sprintf(dummy, "%02X", w_buf[i]);
         strncat(hexString, dummy, strlen(dummy));
     }
 
     logIT(LOG_INFO, "Warte auf %s", hexString);
-    start = time(NULL);
 
     /* wir warten auf das erste Zeichen, danach muss es passen */
+    std::vector<uint8_t> readBytes;
+
     do
     {
-        etime = 0;
-
-        if (receive(fd, r_buf, 1, &etime) < 0)
-            return (0);
-
-        if (time(NULL) - start > TIMEOUT)
-        {
-            logIT(LOG_WARNING, "Timeout wait");
-            return (0);
-        }
+        readBytes = ReadBytes(fd, 1);
     }
-    while (r_buf[0] != w_buf[0]);
+    while (readBytes[0] != w_buf[0]);
 
-    for (i = 1; i < w_len; i++)
+    for (int i = 1; i < w_len; i++)
     {
-        etime = 0;
+        readBytes = ReadBytes(fd, 1);
 
-        if (receive(fd, r_buf, 1, &etime) < 0)
-            return (0);
-
-        if (time(NULL) - start > TIMEOUT)
-        {
-            logIT(LOG_WARNING, "Timeout wait");
-            return (0);
-        }
-
-        if (r_buf[0] != w_buf[i])
+        if (readBytes[0] != w_buf[i])
         {
             logIT(LOG_ERR, "Synchronisation verloren");
-            exit(1);
+            throw std::runtime_error("lost syncronisation");
         }
     }
 
-    /*	logIT(LOG_INFO,"Zeichenkette erkannt"); */
-    return (1);
+    return 1;
 }
 
 template <typename T>
@@ -469,7 +404,11 @@ bool ReadLine(int fd, std::string* line)
     }
 
     // Split the buffer around '\n' found and return first part.
-    *line = std::string(buffer.begin(), pos);
+    if (*(pos - 1) == '\r')
+        *line = std::string(buffer.begin(), pos - 1);
+    else
+        *line = std::string(buffer.begin(), pos);
+
     buffer = std::string(pos + 1, buffer.end());
     return true;
 }

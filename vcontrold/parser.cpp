@@ -1,7 +1,6 @@
 /*
  * parser.c, Routinen fuer das Lesen von Kommandos
  *  */
-/* $Id: parser.c 34 2008-04-06 19:39:29Z marcust $ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -389,7 +388,6 @@ void removeCompileList(compilePtr ptr)
         free(ptr);
     }
 }
-
 
 int expand(commandPtr cPtr, protocolPtr pPtr)
 {

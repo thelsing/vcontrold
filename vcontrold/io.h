@@ -12,6 +12,7 @@ int waitfor(int fd, char* w_buf, int w_len);
 int openDevice(const char* device);
 void closeDevice(int fd);
 
+std::vector<uint8_t> ReadBytes(int fd, int count);
 void WriteBytes(int fd, const std::vector<uint8_t> bytes);
 void WriteString(int fd, const std::string str);
 bool ReadLine(int fd, std::string* line);

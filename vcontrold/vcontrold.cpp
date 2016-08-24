@@ -4,32 +4,32 @@
 /* $Id: vcontrold.c 34 2008-04-06 19:39:29Z marcust $ */
 #include <cstdlib>
 #include <cstdio>
+#include <sstream>
+#include <string>
+#include <memory>
+#include <stdexcept>
+#include <cstring>
+
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
 #include <syslog.h>
 #include <unistd.h>
 #include <termios.h>
-#include <cstring>
 #include <time.h>
 #include <getopt.h>
 #include <pthread.h>
-#include <stdexcept>
-#include <yaml-cpp/yaml.h>
-#include <string>
-#include <memory>
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/times.h>
-
 #include <sys/time.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
 
+#include <yaml-cpp/yaml.h>
 
-#include"io.h"
+#include "io.h"
 #include "common.h"
 #include "xmlconfig.h"
 #include "parser.h"
@@ -50,17 +50,11 @@ int makeDaemon = 1;
 int inetversion = 0;
 pthread_mutex_t device_mutex;
 pthread_mutex_t config_mutex;
-std::string device("");
+std::string device;
 
 /* in xmlconfig.c definiert */
 extern configPtr cfgPtr;
 extern commandPtr cmdPtr;
-
-
-typedef struct _thread_args
-{
-    int sock_fd;
-} thread_args;
 
 void usage()
 {
@@ -104,7 +98,6 @@ bool reloadConfig()
     }
 }
 
-
 void printHelp(int socketfd)
 {
     char string[] = " \
@@ -139,13 +132,12 @@ void printCommands(int socketfd)
     pthread_mutex_unlock(&config_mutex);
 }
 
-void printCommandDetails(char* readBuf, int socketfd)
+void printCommandDetails(char* cmdName, int socketfd)
 {
     char string[256];
-    char* readPtr = readBuf + strlen("detail");
 
-    while (isspace(*readPtr))
-        readPtr++;
+    while (isspace(*cmdName))
+        cmdName++;
 
     try
     {
@@ -153,7 +145,7 @@ void printCommandDetails(char* readBuf, int socketfd)
         commandPtr cPtr;
 
         /* Ist das Kommando in der XML definiert ? */
-        if (readPtr && (cPtr = getCommandNode(cmdPtr, readPtr)))
+        if (cmdName && (cPtr = getCommandNode(cmdPtr, cmdName)))
         {
             bzero(string, sizeof(string));
             snprintf(string, sizeof(string), "%s: %s\n", cPtr->name, cPtr->send);
@@ -185,7 +177,7 @@ void printCommandDetails(char* readBuf, int socketfd)
         else
         {
             bzero(string, sizeof(string));
-            snprintf(string, sizeof(string), "ERR: command %s unbekannt\n", readPtr);
+            snprintf(string, sizeof(string), "ERR: command %s unbekannt\n", cmdName);
             WriteString(socketfd, string);
         }
     }
@@ -310,7 +302,7 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
     pthread_mutex_unlock(&device_mutex);
     pthread_mutex_unlock(&config_mutex);
     end = times(&tms_t);
-    logIT(LOG_WARNING, "runcommand took (%0.1f ms)", ((double)(end - start) / clktck) * 1000);
+    logIT(LOG_INFO, "runcommand took (%0.1f ms)", ((double)(end - start) / clktck) * 1000);
     return result;
 }
 
@@ -337,13 +329,9 @@ std::string bulkExec(char* para, short noUnit)
     return result;
 }
 
-int interactive(int socketfd)
+void interactive(int socketfd)
 {
-    char readBuf[MAXBUF];
     char prompt[] = "vctrld>";
-    char bye[] = "good bye!\n";
-    char unknown[] = "ERR: command unknown\n";
-    char string[256];
     short noUnit = 0;
 
     WriteString(socketfd, prompt);
@@ -351,16 +339,15 @@ int interactive(int socketfd)
 
     while (ReadLine(socketfd, &line))
     {
+        std::stringstream ss;
+
         try
         {
-            logIT(LOG_INFO, "Befehl: %s", readBuf);
+            logIT(LOG_INFO, "Befehl: %s", line.c_str());
 
             /* wir trennen Kommando und evtl. Optionen am ersten Blank */
-            char* cmd;
-            char* para;
-
-            cmd = readBuf;
-            para = strchr(readBuf, ' ');
+            char* cmd = (char*)line.c_str();
+            char* para = strchr(cmd, ' ');
 
             if (para)
             {
@@ -373,8 +360,8 @@ int interactive(int socketfd)
                 printHelp(socketfd);
             else if (strcmp(cmd, "quit") == 0)
             {
-                WriteString(socketfd, bye);
-                return 1;
+                WriteString(socketfd, "good bye!\n");
+                return;
             }
             else if (strcmp(cmd, "debug") == 0)
             {
@@ -393,99 +380,69 @@ int interactive(int socketfd)
             else if (strcmp(cmd, "reload") == 0)
             {
                 if (reloadConfig())
-                    snprintf(string, sizeof(string), "XMLFile %s neu geladen\n", xmlfile);
+                    ss << "XMLFile " << xmlfile << " neu geladen\n";
                 else
-                    snprintf(string, sizeof(string), "Laden von XMLFile %s gescheitert, nutze alte Konfig\n", xmlfile);
+                    ss << "Laden von XMLFile " << xmlfile << " gescheitert, nutze alte Konfig\n";
 
-                WriteString(socketfd, string);
             }
             else if (strcmp(cmd, "commands") == 0)
                 printCommands(socketfd);
 
             else if (strcmp(cmd, "protocol") == 0)
-            {
-                snprintf(string, sizeof(string), "%s\n", cfgPtr->protoPtr->name);
-                WriteString(socketfd, string);
-            }
-            else if (strcmp(cmd, "version") == 0)
-            {
-                snprintf(string, sizeof(string), "Version: %s\n", VERSION_DAEMON);
-                WriteString(socketfd, string);
-            }
-            else if (strcmp(cmd, "bulkexec") == 0)
-            {
-                std::string result = bulkExec(para, noUnit) + "\n";
-                WriteString(socketfd, result);
-            }
-            else if (commandPtr cptr = findCommand(cmd))
-            {
-                std::string result = runCommand(cptr, para, noUnit) + "\n";
-                WriteString(socketfd, result);
-            }
-            else if (strcmp(readBuf, "detail") == 0)
-                printCommandDetails(readBuf, socketfd);
+                ss << cfgPtr->protoPtr->name << std::endl;
 
-            else if (*readBuf)
-                WriteString(socketfd, unknown);
+            else if (strcmp(cmd, "version") == 0)
+                ss << "Version: " << VERSION_DAEMON << std::endl;
+
+            else if (strcmp(cmd, "bulkexec") == 0)
+                ss << bulkExec(para, noUnit) << std::endl;
+
+            else if (commandPtr cptr = findCommand(cmd))
+                ss << runCommand(cptr, para, noUnit) << std::endl;
+
+            else if (line == "detail")
+                printCommandDetails(para, socketfd);
+
+            else if (!line.empty())
+                ss << "ERR: command unknown\n";
         }
         catch (std::exception& e)
         {
             logIT(LOG_ERR, "%s", e.what());
         }
 
+        std::string result = ss.str();
+
+        if (!result.empty())
+            WriteString(socketfd, result);
+
         sendErrMsg(socketfd);
         WriteString(socketfd, prompt);
     }
-
-    sendErrMsg(socketfd);
-    return 0;
 }
-
-static void sigHupHandler(int signo)
-{
-    logIT(LOG_NOTICE, "SIGHUP empfangen");
-    reloadConfig();
-}
-
-static void sigTermHandler(int signo)
-{
-    logIT(LOG_NOTICE, "SIGTERM empfangen");
-    exit(1);
-}
-
-
-static void sigPipeHandler(int signo)
-{
-    logIT(LOG_ERR, "SIGPIPE empfangen");
-}
-
-
 
 void* connection_handler(void* voidArgs)
 {
-    std::shared_ptr<thread_args> args((thread_args*)voidArgs);
+    std::shared_ptr<int> fdPtr((int*)voidArgs);
 
     try
     {
-        interactive(args->sock_fd);
+        interactive(*fdPtr);
     }
     catch (std::exception& e)
     {
         logIT(LOG_ERR, "%s", e.what());
     }
 
-    closeSocket(args->sock_fd);
+    closeSocket(*fdPtr);
     return 0;
 }
-
-
-/* hier gehts los */
 
 int main(int argc, char* argv[])
 {
 
     /* Auswertung der Kommandozeilenschalter */
-    std::string logfile("");
+    std::string logfile;
     int useSyslog = 0;
     int debug = 0;
     int tcpport = 0;
@@ -610,30 +567,16 @@ int main(int argc, char* argv[])
     pthread_mutex_init(&device_mutex, NULL);
     pthread_mutex_init(&config_mutex, NULL);
 
-    if (signal(SIGHUP, sigHupHandler) == SIG_ERR)
-    {
-        logIT(LOG_ERR, "Fehler beim Signalhandling SIGHUP");
-        exit(1);
-    }
-
-    if (signal(SIGQUIT, sigTermHandler) == SIG_ERR)
-    {
-        logIT(LOG_ERR, "Fehler beim Signalhandling SIGTERM: %s", strerror(errno));
-        exit(1);
-    }
-
-    if (signal(SIGPIPE, sigPipeHandler) == SIG_ERR)
+    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
     {
         logIT(LOG_ERR, "Fehler beim Signalhandling SIGPIPE: %s", strerror(errno));
         exit(1);
     }
 
-
     /* die Macros werden ersetzt und die zu sendenden Strings in Bytecode gewandelt */
     expand(cmdPtr, cfgPtr->protoPtr);
     buildByteCode(cmdPtr);
 
-    int fd = 0;
     int sid;
     int pidFD = 0;
     char str[10];
@@ -733,11 +676,10 @@ int main(int argc, char* argv[])
                 /* Socket hat fd zurueckgegeben, den Rest machen wir in interactive */
                 pthread_t thread_id;
 
-                thread_args* args = new thread_args();
+                int* fdPtr = new int(sockfd);
                 logIT(LOG_DEBUG, "main: device: %s", device.c_str());
-                args->sock_fd = sockfd;
 
-                if (pthread_create(&thread_id, NULL, connection_handler, (void*)args) < 0)
+                if (pthread_create(&thread_id, NULL, connection_handler, (void*)fdPtr) < 0)
                 {
                     logIT(LOG_ERR, "Could not create thread.");
                     exit(1);
@@ -748,7 +690,6 @@ int main(int argc, char* argv[])
         }
     }
 
-    close(fd);
     close(pidFD);
     logIT(LOG_LOCAL0, "vcontrold beendet");
 
