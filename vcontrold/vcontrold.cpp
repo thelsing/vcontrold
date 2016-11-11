@@ -580,7 +580,7 @@ int main(int argc, char* argv[])
     int sid;
     int pidFD = 0;
     char str[10];
-    const char* pidFile = "/var/run/vcontrold.pid";
+    const char* pidFile = "/var/run/vcontrold/vcontrold.pid";
 
     if (tcpport)
     {
