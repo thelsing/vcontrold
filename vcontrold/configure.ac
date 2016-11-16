@@ -6,11 +6,12 @@ AC_INIT(vcontrol, 1.0, mschroether@gmx.de)
 
 AM_INIT_AUTOMAKE(no-dependencies)
 
-AC_CONFIG_SRCDIR([vcontrold.c])
+AC_CONFIG_SRCDIR([vcontrold.cpp])
 #AC_CONFIG_HEADER([config.h])
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_CXX
 
 # xml2
 AC_ARG_WITH(xml2-include-dir,
@@ -55,8 +56,8 @@ if test "x$XML2_LIBS" = "x"; then
 	AC_MSG_ERROR([XML2 libraries not found.  Use --with-xml2-lib-dir=<path>])
 fi
 # don't forget to add xml2 to the list of libraries
-LIBS="-lxml2 -lpthread $LIBS"
-
+LIBS="-lxml2 -lpthread -lyaml-cpp $LIBS"
+CXXFLAGS="-O2 -std=c++11"
 # Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h stdint.h stdlib.h string.h sys/ioctl.h sys/socket.h sys/time.h syslog.h termios.h unistd.h sys/types.h sys/ipc.h sys/sem.h])
