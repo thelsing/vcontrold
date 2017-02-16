@@ -6,5 +6,5 @@ AM_LDFLAGS =
 # the previous manual Makefile
 sbin_PROGRAMS = vcontrold
 bin_PROGRAMS = vclient vsim
-vcontrold_SOURCES = vcontrold.c parser.c framer.c io.c common.c socket.c xmlconfig.c arithmetic.c unit.c parser.h framer.h io.h common.h socket.h xmlconfig.h arithmetic.h unit.h
-vclient_SOURCES = vclient.c client.c client.h prompt.h common.c common.h socket.c socket.h io.c io.h
+vcontrold_SOURCES = vcontrold.cpp parser.cpp framer.cpp io.cpp common.cpp socket.cpp xmlconfig.cpp conversion.cpp parser.h framer.h io.h common.h socket.h xmlconfig.h conversion.h
+vclient_SOURCES = vclient.c client.c client.h prompt.h common.cpp common.h socket.cpp socket.h io.cpp io.h
