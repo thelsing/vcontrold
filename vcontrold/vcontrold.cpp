@@ -51,6 +51,7 @@ int inetversion = 0;
 pthread_mutex_t device_mutex;
 pthread_mutex_t config_mutex;
 std::string device;
+Vcontrold::Framer* framerPtr;
 
 /* in xmlconfig.c definiert */
 extern configPtr cfgPtr;
@@ -215,7 +216,6 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
     int count = 0;
 
     char string[256] = "";
-    static int deviceFd = -1;
 
     bzero(string, sizeof(string));
     bzero(recvBuf, sizeof(recvBuf));
@@ -252,10 +252,10 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
     /* das Device wird erst geoeffnet, wenn wir was zu tun haben */
     /* aber nur, falls es nicht schon offen ist */
 
-    if (deviceFd < 0)
+    if (!framerPtr->isOpen())
     {
 
-        if ((deviceFd = framer_openDevice(device.c_str(), cfgPtr->protoPtr->id)) == -1)
+        if (framerPtr->openDevice(cfgPtr->protoPtr->id) == -1)
         {
             logIT(LOG_ERR, "Fehler beim oeffnen %s", device.c_str());
             throw std::logic_error("could not open serial device");
@@ -272,7 +272,7 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
         	0 -> Formaterierter String
         	n -> Bytes in Rohform */
 
-        count = execByteCode(cPtr, deviceFd, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit);
+        count = execByteCode(cPtr, *framerPtr, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit);
 
         if (count == -1)
             logIT(LOG_ERR, "Fehler beim ausfuehren von %s", cPtr->name);
@@ -331,10 +331,8 @@ std::string bulkExec(char* para, short noUnit)
 
 void interactive(int socketfd)
 {
-    char prompt[] = "vctrld>";
     short noUnit = 0;
 
-    WriteString(socketfd, prompt);
     std::string line;
 
     while (ReadLine(socketfd, &line))
@@ -417,7 +415,6 @@ void interactive(int socketfd)
             WriteString(socketfd, result);
 
         sendErrMsg(socketfd);
-        WriteString(socketfd, prompt);
     }
 }
 
@@ -453,7 +450,6 @@ int main(int argc, char* argv[])
 
         static struct option long_options[] =
         {
-            {"device",		required_argument,	0, 'd'},
             {"debug",		no_argument,		&debug, 1},
             {"logfile",		required_argument,	0, 'l'},
             {"nodaemon",	no_argument,		&makeDaemon, 0},
@@ -467,7 +463,7 @@ int main(int argc, char* argv[])
         };
         /* getopt_long stores the option index here. */
         int option_index = 0;
-        opt = getopt_long(argc, argv, "d:gl:np:sx:46",
+        opt = getopt_long(argc, argv, "gl:np:sx:46",
                           long_options, &option_index);
 
         /* Detect the end of the options. */
@@ -493,10 +489,6 @@ int main(int argc, char* argv[])
 
             case '6':
                 inetversion = 6;
-                break;
-
-            case 'd':
-                device = std::string(optarg);
                 break;
 
             case 'g':
@@ -543,23 +535,25 @@ int main(int argc, char* argv[])
 
 
     /* es wurden die beiden globalen Variablen cfgPtr und protoPtr gefuellt */
-    if (cfgPtr)
+    if (!cfgPtr)
     {
-        if (!tcpport)
-            tcpport = cfgPtr->port;
-
-        if (device.empty())
-            device = cfgPtr->tty;
-
-        if (logfile.empty())
-            logfile = cfgPtr->logfile;
-
-        if (!useSyslog)
-            useSyslog = cfgPtr->syslog;
-
-        if (!debug)
-            debug = cfgPtr->debug;
+        fprintf(stderr, "Fehler beim Laden von %s, terminiere!\n", xmlfile);
+        exit(1);
     }
+
+    if (!tcpport)
+        tcpport = cfgPtr->port;
+
+    device = cfgPtr->tty;
+
+    if (logfile.empty())
+        logfile = cfgPtr->logfile;
+
+    if (!useSyslog)
+        useSyslog = cfgPtr->syslog;
+
+    if (!debug)
+        debug = cfgPtr->debug;
 
     if (!initLog(useSyslog, logfile.c_str(), debug))
         exit(1);
@@ -654,6 +648,9 @@ int main(int argc, char* argv[])
             }
         }
 
+        Vcontrold::Framer framer(cfgPtr->tty);
+        framerPtr = &framer;
+
         int sockfd = -1;
         int listenfd = -1;
         /* Zeiger auf die Funktion checkIP */
@@ -677,7 +674,7 @@ int main(int argc, char* argv[])
                 pthread_t thread_id;
 
                 int* fdPtr = new int(sockfd);
-                logIT(LOG_DEBUG, "main: device: %s", device.c_str());
+                logIT(LOG_DEBUG, "main: device: %s", cfgPtr->tty.c_str());
 
                 if (pthread_create(&thread_id, NULL, connection_handler, (void*)fdPtr) < 0)
                 {

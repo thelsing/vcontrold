@@ -127,7 +127,7 @@ static int parseLine(char* line, char* hex, int* hexlen, char* uSPtr, ssize_t uS
     return (token);
 }
 
-int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
+int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, size_t recvLen,
                  char* sendBuf, size_t sendLen, short supressUnit)
 {
 
@@ -178,7 +178,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
             switch (cmpPtr->token)
             {
                 case WAIT:
-                    if (!framer_waitfor(fd, cmpPtr->send, cmpPtr->len))
+                    if (!framer.waitfor(cmpPtr->send, cmpPtr->len))
                     {
                         logIT(LOG_ERR, "Fehler wait, Abbruch");
                         return (-1);
@@ -202,7 +202,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                         cmpPtr = cmpPtr->next;
                     }
 
-                    if (!framer_send(fd, out_buff, _len))
+                    if (!framer.send(out_buff, _len))
                     {
                         logIT(LOG_ERR, "Fehler send, Abbruch");
                         return (-1);
@@ -222,7 +222,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                     etime = 0;
                     bzero(recvBuf, recvLen);
 
-                    if (framer_receive(fd, recvBuf, cmpPtr->len, &etime) <= 0)
+                    if (framer.receive(recvBuf, cmpPtr->len, &etime) <= 0)
                     {
                         logIT(LOG_ERR, "Fehler recv, Abbruch");
                         return (-1);
@@ -309,7 +309,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                     /* es fand keine Wandlung statt */
                     if (sendLen)
                     {
-                        if (!my_send(fd, sendBuf, sendLen))
+                        if (!framer.device().my_send(sendBuf, sendLen))
                         {
                             logIT(LOG_ERR, "Fehler send, Abbruch");
                             return (-1);
@@ -320,7 +320,7 @@ int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen,
                     /* es ist eine Einheit definiert soll benutzt werden und wir haben das oben schon gewandelt */
                     else if (cmpPtr->len)
                     {
-                        if (!my_send(fd, cmpPtr->send, cmpPtr->len))
+                        if (!framer.device().my_send(cmpPtr->send, cmpPtr->len))
                         {
                             logIT(LOG_ERR, "Fehler send unit Bytes, Abbruch");
                             free(cmpPtr->send);

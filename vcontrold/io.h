@@ -4,22 +4,31 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <stdexcept>
 
-int my_send(int fd, char* s_buf, size_t len);
-size_t receive_nb(int fd, char* r_buf, size_t r_len, unsigned long* etime);
-int waitfor(int fd, char* w_buf, int w_len);
+template <typename T>
+void Write(int fd, T bytes)
+{
+    ssize_t	left = bytes.size();
+    ssize_t	idx = 0;
 
-int openDevice(const char* device);
-void closeDevice(int fd);
+    while (left > 0)
+    {
+        ssize_t written = write(fd, &bytes[idx], left);
 
-std::vector<uint8_t> ReadBytes(int fd, int count);
-void WriteBytes(int fd, const std::vector<uint8_t> bytes);
+        if (written <= 0)
+        {
+            if (errno == EINTR)
+                continue;
+            else
+                throw std::runtime_error("error in Write<T>");
+        }
+
+        left -= written;
+        idx += written;
+    }
+}
+
 void WriteString(int fd, const std::string str);
 bool ReadLine(int fd, std::string* line);
-
-#ifndef MAXBUF
-    #define MAXBUF 4096
-#endif
-#define TIMEOUT 5
-
 #endif /* IO_H */

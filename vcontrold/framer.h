@@ -14,18 +14,53 @@
 /*
  * Main indentification of P300 Protocol is about leadin 0x41
  */
+#include "optolink.h"
+#include <stdint.h>
 
 #define FRAMER_ERROR	0
 #define FRAMER_SUCCESS	1
+#define FRAMER_NO_ADDR	( (uint16_t) (-1))
 
-int framer_send(int fd, char* s_buf, size_t len);
+namespace Vcontrold
+{
+    class Framer
+    {
+    public:
+        Framer(const std::string dev) : _device(dev) {};
+        virtual ~Framer() {};
 
-int framer_waitfor(int fd, char* w_buf, int w_len);
+        int send(char* s_buf, size_t len);
 
-int framer_receive(int fd, char* r_buf, int r_len, unsigned long* petime);
+        int waitfor(char* w_buf, int w_len);
 
-int framer_openDevice(const char* device, char pid);
+        int receive(char* r_buf, int r_len, unsigned long* petime);
 
-void framer_closeDevice(int fd);
+        int openDevice(char pid);
+
+        void closeDevice();
+
+        bool isOpen()
+        {
+            return _device.IsOpen();
+        };
+
+        Optolink& device()
+        {
+            return _device;
+        };
+    private:
+        int close_p300();
+        int open_p300();
+        void set_actaddr(void* pdu);
+        void reset_actaddr();
+        int check_actaddr(void* pdu);
+        void set_result(char result);
+        int preset_result(char* r_buf, int r_len, unsigned long* petime);
+
+        Optolink _device;
+        uint16_t current_addr = FRAMER_NO_ADDR; // stored value depends on Endianess
+        char pid = 0;	  // current active protocol
+    };
+}
 
 #endif /* FRAMER_H */

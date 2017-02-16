@@ -28,8 +28,6 @@
 #include "io.h"
 #include "framer.h"
 
-typedef unsigned short int uint16;
-
 // general marker of P300 protocol
 #define P300_LEADIN 	0x41
 #define P300_RESET      0x04
@@ -65,49 +63,43 @@ typedef unsigned short int uint16;
 #define FRAMER_LINK_STATUS(st)  (0xFE00 + st)
 #define FRAMER_READ_TIMEOUT     0
 
-#define FRAMER_NO_ADDR		( (uint16) (-1))
-#define FRAMER_ADDR(pdu)	( *(uint16 *)(((char *)pdu) + 6 ))  // cast [6] +[7] to uint8, even if no char buf
+#define FRAMER_ADDR(pdu)	( *(uint16_t *)(((char *)pdu) + 6 ))  // cast [6] +[7] to uint8, even if no char buf
 #define FRAMER_SET_ADDR(pdu) { framer_current_addr =
 
 // current active command
-static uint16 framer_current_addr = FRAMER_NO_ADDR; // stored value depends on Endianess
 
-// current active protocol
-static char framer_pid = 0;
 
 /*
  *  status handling of current command
  */
-static void framer_set_actaddr(void* pdu)
+void  Vcontrold::Framer::set_actaddr(void* pdu)
 {
     char string[100];
 
-    if (framer_current_addr != FRAMER_NO_ADDR)
+    if (current_addr != FRAMER_NO_ADDR)
     {
-        snprintf(string, sizeof(string), ">FRAMER: addr was still active %04X",
-                 framer_current_addr);
+        snprintf(string, sizeof(string), ">FRAMER: addr was still active %04X", current_addr);
         logIT(LOG_ERR, string);
     }
 
 
-    framer_current_addr = *(uint16*)(((char*)pdu) + P300_ADDR_OFFSET);
+    current_addr = *(uint16_t*)(((char*)pdu) + P300_ADDR_OFFSET);
 }
 
-static void framer_reset_actaddr(void)
+void Vcontrold::Framer::reset_actaddr()
 {
-    framer_current_addr = FRAMER_NO_ADDR;
+    current_addr = FRAMER_NO_ADDR;
 }
 
-static int framer_check_actaddr(void* pdu)
+int Vcontrold::Framer::check_actaddr(void* pdu)
 {
     char string[100];
 
-    if (framer_current_addr
-        != *(uint16*)(((char*)pdu) + P300_ADDR_OFFSET))
+    if (current_addr != *(uint16_t*)(((char*)pdu) + P300_ADDR_OFFSET))
     {
         snprintf(string, sizeof(string), ">FRAMER: addr corrupted stored %04X, now %04X",
-                 framer_current_addr,
-                 *(uint16*)(((char*)pdu) + P300_ADDR_OFFSET));
+                 current_addr,
+                 *(uint16_t*)(((char*)pdu) + P300_ADDR_OFFSET));
         return -1;
     }
 
@@ -115,18 +107,18 @@ static int framer_check_actaddr(void* pdu)
 }
 
 //TODO: could cause trouble on addr containing 0xFE
-static void framer_set_result(char result)
+void Vcontrold::Framer::set_result(char result)
 {
-    framer_current_addr = (uint16) FRAMER_LINK_STATUS(result);
+    current_addr = (uint16_t) FRAMER_LINK_STATUS(result);
 }
 
-static int framer_preset_result(char* r_buf, int r_len, unsigned long* petime)
+int Vcontrold::Framer::preset_result(char* r_buf, int r_len, unsigned long* petime)
 {
     char string[100];
 
-    if ((framer_pid == P300_LEADIN) && ((framer_current_addr & FRAMER_LINK_STATUS(0)) == FRAMER_LINK_STATUS(0)))
+    if ((pid == P300_LEADIN) && ((current_addr & FRAMER_LINK_STATUS(0)) == FRAMER_LINK_STATUS(0)))
     {
-        r_buf[0] = (char)(framer_current_addr ^ FRAMER_LINK_STATUS(0));
+        r_buf[0] = (char)(current_addr ^ FRAMER_LINK_STATUS(0));
         snprintf(string, sizeof(string), ">FRAMER: preset result %02X", r_buf[0]);
         logIT(LOG_INFO, string);
         return FRAMER_SUCCESS;
@@ -140,7 +132,7 @@ static int framer_preset_result(char* r_buf, int r_len, unsigned long* petime)
 /*
  * synchronisation for P300 + switch to P300, back to normal for close -> repeating 05
  */
-static int framer_close_p300(int fd)
+int Vcontrold::Framer::close_p300()
 {
     char string[100];
     int i;
@@ -151,34 +143,34 @@ static int framer_close_p300(int fd)
 
     for (i = 0; i < P300X_ATTEMPTS; i++)
     {
-        if (!my_send(fd, &wbuf, 1))
+        if (!_device.my_send(&wbuf, 1))
         {
-            framer_set_result(P300_ERROR);
+            set_result(P300_ERROR);
             snprintf(string, sizeof(string), ">FRAMER: reset not send");
             logIT(LOG_ERR, string);
             return FRAMER_ERROR;;
         }
 
         etime = 0;
-        rlen = receive_nb(fd, &rbuf, 1, &etime);
+        rlen = _device.receive_nb(&rbuf, 1, &etime);
 
         if (rlen < 0)
         {
-            framer_set_result(P300_ERROR);
+            set_result(P300_ERROR);
             snprintf(string, sizeof(string), ">FRAMER: close read failure");
             logIT(LOG_ERR, string);
             return FRAMER_ERROR;
         }
         else if (rlen == 0)
         {
-            framer_set_result(P300_ERROR);
+            set_result(P300_ERROR);
             snprintf(string, sizeof(string), ">FRAMER: close read timeout for ack");
             logIT(LOG_ERR, string);
             return FRAMER_ERROR;
         }
         else if ((rbuf == P300_INIT_OK) || (rbuf == P300_NOT_INIT))
         {
-            framer_set_result(P300_NOT_INIT);
+            set_result(P300_NOT_INIT);
             snprintf(string, sizeof(string), ">FRAMER: closed");
             logIT(LOG_INFO, string);
             return FRAMER_SUCCESS;
@@ -191,13 +183,13 @@ static int framer_close_p300(int fd)
         }
     }
 
-    framer_set_result(P300_ERROR);
+    set_result(P300_ERROR);
     snprintf(string, sizeof(string), ">FRAMER: could not close (%d attempts)", P300X_ATTEMPTS);
     logIT(LOG_ERR, string);
     return FRAMER_ERROR;
 }
 
-static int framer_open_p300(int fd)
+int Vcontrold::Framer::open_p300()
 {
     char string[100];
     int i;
@@ -206,7 +198,7 @@ static int framer_open_p300(int fd)
     unsigned long etime;
     int rlen;
 
-    if (!framer_close_p300(fd))
+    if (!close_p300())
     {
         snprintf(string, sizeof(string), ">FRAMER: could not set start cond");
         logIT(LOG_ERR, string);
@@ -215,41 +207,41 @@ static int framer_open_p300(int fd)
 
     for (i = 0; i < P300X_ATTEMPTS; i++)
     {
-        if (!my_send(fd, enable, sizeof(enable)))
+        if (!_device.my_send(enable, sizeof(enable)))
         {
-            framer_set_result(P300_ERROR);
+            set_result(P300_ERROR);
             snprintf(string, sizeof(string), ">FRAMER: enable not send");
             logIT(LOG_ERR, string);
             return FRAMER_ERROR;;
         }
 
         etime = 0;
-        rlen = receive_nb(fd, &rbuf, 1, &etime);
+        rlen = _device.receive_nb(&rbuf, 1, &etime);
 
         if (rlen < 0)
         {
-            framer_set_result(P300_ERROR);
+            set_result(P300_ERROR);
             snprintf(string, sizeof(string), ">FRAMER: enable read failure");
             logIT(LOG_ERR, string);
             return FRAMER_ERROR;
         }
         else if (rlen == 0)
         {
-            framer_set_result(P300_ERROR);
+            set_result(P300_ERROR);
             snprintf(string, sizeof(string), ">FRAMER: enable read timeout for ack");
             logIT(LOG_ERR, string);
             return FRAMER_ERROR;
         }
         else if (rbuf == P300_INIT_OK)
         {
-            framer_set_result(P300_INIT_OK);
+            set_result(P300_INIT_OK);
             snprintf(string, sizeof(string), ">FRAMER: opened");
             logIT(LOG_INFO, string);
             return FRAMER_SUCCESS;
         }
     }
 
-    framer_set_result(P300_ERROR);
+    set_result(P300_ERROR);
     snprintf(string, sizeof(string), ">FRAMER: could not close (%d attempts)", P300X_ATTEMPTS);
     logIT(LOG_ERR, string);
     return FRAMER_ERROR;
@@ -288,7 +280,7 @@ static char framer_chksum(char* buf, int len)
  * | LEADIN | payload len | type | function | addr | exp len | chk |
  */
 
-int framer_send(int fd, char* s_buf, size_t len)
+int Vcontrold::Framer::send(char* s_buf, size_t len)
 {
     char string[256];
 
@@ -299,8 +291,8 @@ int framer_send(int fd, char* s_buf, size_t len)
         return FRAMER_ERROR;
     }
 
-    if (framer_pid != P300_LEADIN)
-        return my_send(fd, s_buf, len);
+    if (pid != P300_LEADIN)
+        return _device.my_send(s_buf, len);
     else if (len < 3)
     {
         snprintf(string, sizeof(string), ">FRAMER: too few for P300");
@@ -325,7 +317,7 @@ int framer_send(int fd, char* s_buf, size_t len)
         l_buf[P300_ADDR_OFFSET + pos] = framer_chksum(l_buf + 1,
                                         len + P300_EXTRA_BYTES - 2);
 
-        if (!my_send(fd, l_buf, len + P300_EXTRA_BYTES))
+        if (!_device.my_send(l_buf, len + P300_EXTRA_BYTES))
         {
             snprintf(string, sizeof(string), ">FRAMER: write failure %d",
                      len + P300_EXTRA_BYTES);
@@ -334,7 +326,7 @@ int framer_send(int fd, char* s_buf, size_t len)
         }
 
         etime = 0;
-        rlen = receive_nb(fd, l_buf, 1, &etime);
+        rlen = _device.receive_nb(l_buf, 1, &etime);
 
         if (rlen < 0)
         {
@@ -355,7 +347,7 @@ int framer_send(int fd, char* s_buf, size_t len)
             return FRAMER_ERROR;
         }
 
-        framer_set_actaddr(l_buf);
+        set_actaddr(l_buf);
         snprintf(string, sizeof(string), ">FRAMER: Command send");
         logIT(LOG_DEBUG, string);
         return FRAMER_SUCCESS;
@@ -385,7 +377,7 @@ int framer_send(int fd, char* s_buf, size_t len)
  * KW may have values returned starting 0x41
  */
 
-int framer_receive(int fd, char* r_buf, int r_len, unsigned long* petime)
+int Vcontrold::Framer::receive(char* r_buf, int r_len, unsigned long* petime)
 {
     char string[256];
     int rlen;
@@ -405,30 +397,30 @@ int framer_receive(int fd, char* r_buf, int r_len, unsigned long* petime)
         return FRAMER_ERROR;
     }
 
-    if (framer_preset_result(r_buf, r_len, petime))
+    if (preset_result(r_buf, r_len, petime))
     {
-        framer_reset_actaddr();
+        reset_actaddr();
         return FRAMER_SUCCESS;
     }
 
     *petime = 0;
-    rtmp = receive_nb(fd, l_buf, r_len, petime);
+    rtmp = _device.receive_nb(l_buf, r_len, petime);
 
     if (rtmp < 0)
     {
         snprintf(string, sizeof(string), ">FRAMER: read failure");
         logIT(LOG_ERR, string);
-        framer_reset_actaddr();
+        reset_actaddr();
         return FRAMER_READ_ERROR;
     }
     else if (rtmp == 0)
     {
         snprintf(string, sizeof(string), ">FRAMER: read timeout");
         logIT(LOG_ERR, string);
-        framer_reset_actaddr();
+        reset_actaddr();
         return FRAMER_READ_TIMEOUT;
     }
-    else if (framer_pid != P300_LEADIN)
+    else if (pid != P300_LEADIN)
     {
         // no P300 frame, just forward
         for (rlen = 0; rlen < r_len; rlen++)
@@ -443,19 +435,19 @@ int framer_receive(int fd, char* r_buf, int r_len, unsigned long* petime)
     // read at least the length info
     if (rtmp < 2)
     {
-        rlen = receive_nb(fd, l_buf + 1, 1, &etime);
+        rlen = _device.receive_nb(l_buf + 1, 1, &etime);
         *petime += etime;
 
         if (rlen < 0)
         {
-            framer_reset_actaddr();
+            reset_actaddr();
             snprintf(string, sizeof(string), ">FRAMER: read failure");
             logIT(LOG_ERR, string);
             return FRAMER_READ_ERROR;
         }
         else if (rlen == 0)
         {
-            framer_reset_actaddr();
+            reset_actaddr();
             snprintf(string, sizeof(string), ">FRAMER: read timeout");
             logIT(LOG_ERR, string);
             return FRAMER_READ_TIMEOUT;
@@ -469,14 +461,14 @@ int framer_receive(int fd, char* r_buf, int r_len, unsigned long* petime)
 
     if (rlen <= 0)
     {
-        framer_reset_actaddr();
+        reset_actaddr();
         snprintf(string, sizeof(string), ">FRAMER: strange read %d", rlen);
         logIT(LOG_ERR, string);
         return rtmp; // strange should not happen here
     }
 
     // now read what is extra
-    rtmp = receive_nb(fd, l_buf + rtmp, rlen, &etime);
+    rtmp = _device.receive_nb(l_buf + rtmp, rlen, &etime);
     *petime += etime;
 
     // bug in Vitotronic getTimerWWMi, we got it , but complete
@@ -489,14 +481,14 @@ int framer_receive(int fd, char* r_buf, int r_len, unsigned long* petime)
 
     if (rtmp < 0)
     {
-        framer_reset_actaddr();
+        reset_actaddr();
         snprintf(string, sizeof(string), ">FRAMER: read final failure");
         logIT(LOG_ERR, string);
         return FRAMER_READ_ERROR;
     }
     else if (rtmp == 0)
     {
-        framer_reset_actaddr();
+        reset_actaddr();
         snprintf(string, sizeof(string), ">FRAMER: read final timeout");
         logIT(LOG_ERR, string);
         return FRAMER_READ_TIMEOUT;
@@ -506,7 +498,7 @@ int framer_receive(int fd, char* r_buf, int r_len, unsigned long* petime)
 
     if (l_buf[total - 1] != chk)
     {
-        framer_reset_actaddr();
+        reset_actaddr();
         snprintf(string, sizeof(string), ">FRAMER: read chksum error received 0x%02X calc 0x%02X", (unsigned char)l_buf[total - 1], (unsigned char)chk);
         logIT(LOG_ERR, string);
         return FRAMER_READ_ERROR;
@@ -516,7 +508,7 @@ except:
 
     if (l_buf[P300_TYPE_OFFSET] == P300_ERROR_REPORT)
     {
-        framer_reset_actaddr();
+        reset_actaddr();
         snprintf(string, sizeof(string), ">FRAMER: ERROR address %02X%02X code %d",
                  l_buf[P300_ADDR_OFFSET], l_buf[P300_ADDR_OFFSET + 1],
                  l_buf[P300_BUFFER_OFFSET]);
@@ -527,7 +519,7 @@ except:
     {
         if (r_len != l_buf[P300_RESP_LEN_OFFSET])
         {
-            framer_reset_actaddr();
+            reset_actaddr();
             snprintf(string, sizeof(string), ">FRAMER: unexpected length %d %02X",
                      l_buf[P300_RESP_LEN_OFFSET], l_buf[P300_RESP_LEN_OFFSET]);
             logIT(LOG_ERR, string);
@@ -536,9 +528,9 @@ except:
     }
 
     // TODO: could add check for address receive matching address send before
-    if (framer_check_actaddr(l_buf))
+    if (check_actaddr(l_buf))
     {
-        framer_reset_actaddr();
+        reset_actaddr();
         snprintf(string, sizeof(string), ">FRAMER: not matching response addr");
         logIT(LOG_ERR, string);
         return FRAMER_READ_ERROR;
@@ -564,61 +556,59 @@ except:
             r_buf[rtmp] = l_buf[P300_BUFFER_OFFSET + rtmp];
     }
 
-    framer_reset_actaddr();
+    reset_actaddr();
     return r_len;
 }
 
-int framer_waitfor(int fd, char* w_buf, int w_len)
+int Vcontrold::Framer::waitfor(char* w_buf, int w_len)
 {
 
     unsigned long etime;
 
-    if (framer_preset_result(w_buf, w_len, &etime))
+    if (preset_result(w_buf, w_len, &etime))
     {
-        framer_reset_actaddr();
+        reset_actaddr();
         return FRAMER_SUCCESS;
     }
 
-    return waitfor(fd, w_buf, w_len);
+    std::vector<uint8_t> bytes(w_buf, w_buf + w_len);
+    _device.WaitFor(bytes);
+    return FRAMER_SUCCESS;
 }
 
 /*
  * Device handling,
  * with open and close the mode is also switched to P300/back
  */
-int framer_openDevice(const char* device, char pid)
+int Vcontrold::Framer::openDevice(char pid)
 {
     char string[100];
     int fd;
 
-    snprintf(string, sizeof(string), ">FRAMER: open device %s ProtocolID %02X", device, pid);
+    snprintf(string, sizeof(string), ">FRAMER: open device %s ProtocolID %02X", _device.DevicePath().c_str(), pid);
     logIT(LOG_INFO, string);
 
-    if ((fd = openDevice(device)) == -1)
-        return -1;
+    _device.OpenConnection();
 
     if (pid == P300_LEADIN)
     {
-        if (!framer_open_p300(fd))
+        if (!open_p300())
         {
-            closeDevice(fd);
+            _device.CloseConnection();
             return -1;
         }
     }
 
-    framer_pid = pid;
+    this->pid = pid;
     return fd;
 }
 
-void framer_closeDevice(int fd)
+void Vcontrold::Framer::closeDevice()
 {
-    if (framer_pid == P300_LEADIN)
-        framer_close_p300(fd);
+    if (pid == P300_LEADIN)
+        close_p300();
 
-    framer_pid = 0;
-    closeDevice(fd);
+    pid = 0;
+    _device.CloseConnection();
 }
 
-/*
- * end
- */

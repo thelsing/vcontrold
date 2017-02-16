@@ -2,9 +2,10 @@
 #define PARSER_H
 
 #include "xmlconfig.h"
+#include "framer.h"
 
 void removeCompileList(compilePtr ptr);
-int execByteCode(commandPtr cmdPtr, int fd, char* recvBuf, size_t recvLen, char* sendBuf, size_t sendLen, short supressUnit);
+int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, size_t recvLen, char* sendBuf, size_t sendLen, short supressUnit);
 compilePtr buildByteCode(commandPtr cPtr);
 int expand(commandPtr cPtr, protocolPtr pPtr);
 

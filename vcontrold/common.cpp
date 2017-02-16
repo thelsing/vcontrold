@@ -127,6 +127,11 @@ void logIT(int logclass, const char* string, ...)
     free(print_buffer);
 }
 
+void logIT(int logclass, const std::string& msg)
+{
+    logIT(logclass, "%s", msg.c_str());
+}
+
 void sendErrMsg(int fd)
 {
     char string[256];
