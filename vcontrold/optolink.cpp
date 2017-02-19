@@ -18,44 +18,24 @@
 
 #define TIMEOUT 5
 
-static char* dump(char* dest, const char* title, char* buf, size_t len)
+void Vcontrold::Optolink::FlushReadAndSend(const std::vector<uint8_t>& bytes)
 {
-    int pos = 0;
-    size_t i;
-
-    pos = sprintf(dest, "%s", title);
-
-    for (i = 0; i < len; i++)
-        pos += sprintf(dest + pos, " %02X", buf[i] & 0xff);
-
-    return dest;
-}
-
-int Vcontrold::Optolink::my_send(char* s_buf, size_t len)
-{
-    char string[256];
-
     /* Buffer leeren */
     /* da tcflush nicht richtig funktioniert, verwenden wir nonblocking read */
     fcntl(_fd, F_SETFL, O_NONBLOCK);
 
-    while (read(_fd, string, sizeof(string)) > 0);
+    char string[256];
+
+    while (read(_fd, string, sizeof(string)) > 0)
+        ;
 
     fcntl(_fd, F_SETFL, !O_NONBLOCK);
 
     tcflush(_fd, TCIFLUSH);
 
-    std::vector<uint8_t> bytes(s_buf, s_buf + len);
     WriteBytes(bytes);
 
-    for (size_t i = 0; i < len; i++)
-    {
-
-        unsigned char byte = s_buf[i] & 255;
-        logIT(LOG_INFO, ">SEND: %02X", (int)byte);
-    }
-
-    return 1;
+    logIT(LOG_INFO, std::string(">SEND: "), bytes);
 }
 
 static int setnonblock(int fd)
@@ -93,11 +73,10 @@ static int setblock(int fd)
 }
 
 
-size_t Vcontrold::Optolink::receive_nb(char* r_buf, size_t r_len, unsigned long* etime)
+std::vector<uint8_t> Vcontrold::Optolink::ReadNBytes(size_t bytesToRead)
 {
     size_t i;
     ssize_t len;
-    char string[100];
 
     fd_set rfds;
     struct timeval tv;
@@ -110,8 +89,9 @@ size_t Vcontrold::Optolink::receive_nb(char* r_buf, size_t r_len, unsigned long*
     mid1 = start;
 
     i = 0;
+    std::vector<uint8_t> result(bytesToRead);
 
-    while (i < r_len)
+    while (i < bytesToRead)
     {
         setnonblock(_fd);
         FD_ZERO(&rfds);
@@ -124,8 +104,8 @@ size_t Vcontrold::Optolink::receive_nb(char* r_buf, size_t r_len, unsigned long*
         {
             logIT(LOG_ERR, "<RECV: read timeout");
             setblock(_fd);
-            logIT(LOG_INFO, dump(string, "<RECV: received", r_buf, i));
-            return (-1);
+            logIT(LOG_INFO, std::string("<RECV: received "), result);
+            throw OptoLinkException("Read Timeout");
         }
         else if (retval < 0)
         {
@@ -136,22 +116,27 @@ size_t Vcontrold::Optolink::receive_nb(char* r_buf, size_t r_len, unsigned long*
             }
             else
             {
-                logIT(LOG_ERR, "<RECV: select error %d", retval);
+                std::stringstream msgStream;
+                msgStream << "<RECV: select error " << retval;
+                std::string msg = msgStream.str();
+
+                logIT(LOG_ERR, msg);
                 setblock(_fd);
-                logIT(LOG_INFO, dump(string, "<RECV: received", r_buf, i));
-                return (-1);
+                logIT(LOG_INFO, std::string("<RECV: received "), result);
+                throw OptoLinkException(msg);
             }
         }
         else if (FD_ISSET(_fd, &rfds))
         {
-            len = read(_fd, &r_buf[i], r_len - i);
+            len = read(_fd, &result[i], result.size() - i);
 
             if (len == 0)
             {
-                logIT(LOG_ERR, "<RECV: read eof");
+                std::string msg("<RECV: read eof");
+                logIT(LOG_ERR, msg);
                 setblock(_fd);
-                logIT(LOG_INFO, dump(string, "<RECV: received", r_buf, i));
-                return (-1);
+                logIT(LOG_INFO, std::string("<RECV: received "), result);
+                throw OptoLinkException(msg);
             }
             else if (len < 0)
             {
@@ -162,17 +147,19 @@ size_t Vcontrold::Optolink::receive_nb(char* r_buf, size_t r_len, unsigned long*
                 }
                 else
                 {
-                    logIT(LOG_ERR, "<RECV: read error %d", errno);
+                    std::stringstream msgStream;
+                    msgStream << "<RECV: read error " << errno;
+                    std::string msg = msgStream.str();
+                    logIT(LOG_ERR, msg);
                     setblock(_fd);
-                    logIT(LOG_INFO, dump(string, "<RECV: received", r_buf, i));
-                    return (-1);
+                    logIT(LOG_INFO, std::string("<RECV: received "), result);
+                    throw OptoLinkException(msg);
                 }
             }
             else
             {
-                unsigned char byte = r_buf[i] & 255;
                 mid = times(&tms_t);
-                logIT(LOG_INFO, "<RECV: len=%zd %02X (%0.1f ms)", len, byte, ((double)(mid - mid1) / clktck) * 1000);
+                logIT(LOG_INFO, "<RECV: len=%zd %02X (%0.1f ms)", len, result[i], ((double)(mid - mid1) / clktck) * 1000);
                 mid1 = mid;
                 i += (size_t)len;
             }
@@ -182,24 +169,19 @@ size_t Vcontrold::Optolink::receive_nb(char* r_buf, size_t r_len, unsigned long*
     }
 
     end = times(&tms_t);
-    *etime = (unsigned long)((double)(end - start) / clktck) * 1000;
+    long etime = (unsigned long)((double)(end - start) / clktck) * 1000;
     setblock(_fd);
-    logIT(LOG_INFO, dump(string, "<RECV: received", r_buf, i));
-    return i;
+
+    std::stringstream msgStream;
+    msgStream << "<RECV: received (" << etime << " ms ) ";
+    logIT(LOG_INFO, msgStream.str(), result);
+
+    return result;
 }
 
 void Vcontrold::Optolink::WaitFor(const std::vector<uint8_t>& bytes)
 {
-    char hexString[128] = "\0";
-    char dummy[3];
-
-    for (size_t i = 0; i < bytes.size(); i++)
-    {
-        sprintf(dummy, "%02X", bytes[i]);
-        strncat(hexString, dummy, strlen(dummy));
-    }
-
-    logIT(LOG_INFO, "Warte auf %s", hexString);
+    logIT(LOG_INFO, std::string("Warte auf "), bytes);
 
     /* wir warten auf das erste Zeichen, danach muss es passen */
     std::vector<uint8_t> readBytes;
@@ -331,7 +313,7 @@ std::vector<uint8_t> Vcontrold::Optolink::ReadBytes(int count)
     return result;
 }
 
-void Vcontrold::Optolink::WriteBytes(const std::vector<uint8_t> bytes)
+void Vcontrold::Optolink::WriteBytes(const std::vector<uint8_t>& bytes)
 {
     Write(_fd, bytes);
 }

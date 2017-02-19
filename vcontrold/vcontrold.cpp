@@ -255,7 +255,7 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
     if (!framerPtr->isOpen())
     {
 
-        if (framerPtr->openDevice(cfgPtr->protoPtr->id) == -1)
+        if (framerPtr->OpenDevice(cfgPtr->protoPtr->id) == -1)
         {
             logIT(LOG_ERR, "Fehler beim oeffnen %s", device.c_str());
             throw std::logic_error("could not open serial device");

@@ -13,6 +13,8 @@
 #include <time.h>
 #include <ctype.h>
 #include <stdarg.h>
+#include <sstream>
+#include <iomanip>
 
 #include"common.h"
 
@@ -130,6 +132,18 @@ void logIT(int logclass, const char* string, ...)
 void logIT(int logclass, const std::string& msg)
 {
     logIT(logclass, "%s", msg.c_str());
+}
+
+void logIT(int logclass, const std::string& title, const std::vector<uint8_t>& bytes)
+{
+    std::stringstream msg;
+    msg << title << "(" << bytes.size() << " bytes) ";
+    msg << std::hex << std::uppercase << std::setfill('0');
+
+    for (size_t i = 0; i < bytes.size(); i++)
+        msg << std::setw(2) << static_cast<int>(bytes[i]) << " ";
+
+    logIT(logclass, msg.str());
 }
 
 void sendErrMsg(int fd)

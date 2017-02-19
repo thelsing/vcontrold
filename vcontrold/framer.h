@@ -23,6 +23,13 @@
 
 namespace Vcontrold
 {
+    class FramerException : public Exception
+    {
+    public:
+        FramerException(const std::string msg) : Exception(msg) {};
+        virtual ~FramerException() {};
+    };
+
     class Framer
     {
     public:
@@ -31,13 +38,13 @@ namespace Vcontrold
 
         int send(char* s_buf, size_t len);
 
-        int waitfor(char* w_buf, int w_len);
+        void WaitFor(std::vector<uint8_t> bytes);
 
-        int receive(char* r_buf, int r_len, unsigned long* petime);
+        std::vector<uint8_t> receive(size_t r_len);
 
-        int openDevice(char pid);
+        int OpenDevice(char pid);
 
-        void closeDevice();
+        void CloseDevice();
 
         bool isOpen()
         {
@@ -53,9 +60,9 @@ namespace Vcontrold
         int open_p300();
         void set_actaddr(void* pdu);
         void reset_actaddr();
-        int check_actaddr(void* pdu);
+        bool CheckActAddr(std::vector<uint8_t> pdu);
         void set_result(char result);
-        int preset_result(char* r_buf, int r_len, unsigned long* petime);
+        bool PresetResult(std::vector<uint8_t> result);
 
         Optolink _device;
         uint16_t current_addr = FRAMER_NO_ADDR; // stored value depends on Endianess

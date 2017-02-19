@@ -178,15 +178,16 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
             switch (cmpPtr->token)
             {
                 case WAIT:
-                    if (!framer.waitfor(cmpPtr->send, cmpPtr->len))
-                    {
-                        logIT(LOG_ERR, "Fehler wait, Abbruch");
-                        return (-1);
-                    }
+                {
+                    std::vector<uint8_t> bytes(cmpPtr->send, cmpPtr->send + cmpPtr->len);
+                    framer.WaitFor(bytes);
 
                     bzero(string, sizeof(string));
                     char2hex(string, cmpPtr->send, cmpPtr->len);
+
                     break;
+                }
+
 
                 case SEND:
                     _len = 0;
@@ -213,6 +214,7 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
                     break;
 
                 case RECV:
+                {
                     if (cmpPtr->len > recvLen)
                     {
                         logIT(LOG_ERR, "Recv Buffer zu klein. Ist: %d Soll %d", recvLen, cmpPtr->len);
@@ -222,11 +224,8 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
                     etime = 0;
                     bzero(recvBuf, recvLen);
 
-                    if (framer.receive(recvBuf, cmpPtr->len, &etime) <= 0)
-                    {
-                        logIT(LOG_ERR, "Fehler recv, Abbruch");
-                        return (-1);
-                    }
+                    std::vector<uint8_t> resultVector = framer.receive(cmpPtr->len);
+                    memcpy(recvBuf, &resultVector.front(), resultVector.size());
 
                     /* falls wir beim empfangen laenger als der Timeout gebraucht haben gehts in die
                     naechste Rune */
@@ -292,6 +291,7 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
 
                     return (cmpPtr->len);
                     break;
+                }
 
                 case PAUSE:
                     logIT(LOG_INFO, "Warte %i ms", cmpPtr->len);
@@ -299,7 +299,7 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
                     /* t_sleep.tv_sec=(time_t) cmpPtr->len / 1000;
                     t_sleep.tv_nsec=(long) cmpPtr->len * 1000000;
                     if (nanosleep(&t_sleep,&t_sleep_rem)==-1)
-                        nanosleep(&t_sleep_rem,NULL);
+                    	nanosleep(&t_sleep_rem,NULL);
                     */
                     break;
 
@@ -309,25 +309,16 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
                     /* es fand keine Wandlung statt */
                     if (sendLen)
                     {
-                        if (!framer.device().my_send(sendBuf, sendLen))
-                        {
-                            logIT(LOG_ERR, "Fehler send, Abbruch");
-                            return (-1);
-                        }
+                        std::vector<uint8_t> bytes(sendBuf, sendBuf + sendLen);
+                        framer.device().FlushReadAndSend(bytes);
 
                         char2hex(string, sendBuf, sendLen);
                     }
                     /* es ist eine Einheit definiert soll benutzt werden und wir haben das oben schon gewandelt */
                     else if (cmpPtr->len)
                     {
-                        if (!framer.device().my_send(cmpPtr->send, cmpPtr->len))
-                        {
-                            logIT(LOG_ERR, "Fehler send unit Bytes, Abbruch");
-                            free(cmpPtr->send);
-                            cmpPtr->send = NULL;
-                            cmpPtr->len = 0;
-                            return (-1);
-                        }
+                        std::vector<uint8_t> bytes(cmpPtr->send, cmpPtr->send + cmpPtr->len);
+                        framer.device().FlushReadAndSend(bytes);
 
                         bzero(string, sizeof(string));
                         char2hex(string, cmpPtr->send, cmpPtr->len);
@@ -461,7 +452,7 @@ int expand(commandPtr cPtr, protocolPtr pPtr)
         strncpy(var, ptr + 1, bptr - ptr - 1);
 
         /*		snprintf(string, sizeof(string),"   Var: %s",var);
-                logIT(LOG_INFO,string); */
+        		logIT(LOG_INFO,string); */
         if (*var)   /* Haben wir uerbhaupt Variablen zu expandieren */
         {
             if (strstr(var, "addr") == var)

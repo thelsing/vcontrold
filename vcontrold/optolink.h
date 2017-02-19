@@ -20,14 +20,14 @@ namespace Vcontrold
         Optolink(const std::string& devicePath) : _devicePath(devicePath) {};
         virtual ~Optolink() {};
 
-        int my_send(char* s_buf, size_t len);
-        size_t receive_nb(char* r_buf, size_t r_len, unsigned long* etime);
+        void FlushReadAndSend(const std::vector<uint8_t>& bytes);
+        std::vector<uint8_t> ReadNBytes(size_t bytesToRead);
 
         void OpenConnection();
         void CloseConnection();
 
         std::vector<uint8_t> ReadBytes(int count);
-        void WriteBytes(const std::vector<uint8_t> bytes);
+        void WriteBytes(const std::vector<uint8_t>& bytes);
         void WaitFor(const std::vector<uint8_t>& bytes);
 
         const std::string& DevicePath()

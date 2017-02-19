@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace Vcontrold
 {
@@ -24,6 +25,7 @@ namespace Vcontrold
 int initLog(int useSyslog, const char* logfile, int debugSwitch);
 void logIT(int logclass, const char* string, ...);
 void logIT(int logclass, const std::string& msg);
+void logIT(int logclass, const std::string& msg, const std::vector<uint8_t>& bytes);
 char hex2chr(char* hex);
 size_t char2hex(char* outString, const char* charPtr, size_t len);
 size_t string2chr(char* line, char* buf, size_t bufsize);
