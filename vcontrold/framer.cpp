@@ -23,9 +23,10 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <sstream>
+#include <iomanip>
 
 #include "common.h"
-#include "io.h"
 #include "framer.h"
 
 // general marker of P300 protocol
@@ -47,73 +48,47 @@
 #define P300X_OPEN          0x01
 #define P300X_CLOSE         0x00
 #define P300X_ATTEMPTS		3
+
 // response
 #define P300_ERROR 			0x15
 #define P300_NOT_INIT		0x05
 #define P300_INIT_OK		0x06
 
+#define P300_LEADIN_OFFSET    0
+#define P300_LEN_OFFSET       1
 #define P300_TYPE_OFFSET      2
 #define P300_FCT_OFFSET       3
 #define P300_ADDR_OFFSET      4
 #define P300_RESP_LEN_OFFSET  6
 #define P300_BUFFER_OFFSET    7
-#define P300_EXTRA_BYTES      3
 
-#define FRAMER_READ_ERROR	    (-1)
-#define FRAMER_LINK_STATUS(st)  (0xFE00 + st)
-#define FRAMER_READ_TIMEOUT     0
-
-#define FRAMER_ADDR(pdu)	( *(uint16_t *)(((char *)pdu) + 6 ))  // cast [6] +[7] to uint8, even if no char buf
-#define FRAMER_SET_ADDR(pdu) { framer_current_addr =
-
-// current active command
-
+#define P300_EXTRA_BYTES      3 // LEADIN + LEN + CHECKSUM
+#define P300_RESP_EXTRA_BYTES 5 // TYPE + FCT + ADDR + RESP_LEN
+#define P300_NOCRC_BYTES      2 // LEADIN + CHECKSUM
 
 /*
  *  status handling of current command
  */
-void  Vcontrold::Framer::set_actaddr(void* pdu)
+void  Vcontrold::Framer::SetActiveAddress(std::vector<uint8_t>& pdu)
 {
-    char string[100];
-
-    if (current_addr != FRAMER_NO_ADDR)
+    if (_currentAddress != FRAMER_NO_ADDR)
     {
-        snprintf(string, sizeof(string), ">FRAMER: addr was still active %04X", current_addr);
+        char string[100];
+        snprintf(string, sizeof(string), ">FRAMER: addr was still active %04X", _currentAddress);
         logIT(LOG_ERR, string);
     }
 
-
-    current_addr = *(uint16_t*)(((char*)pdu) + P300_ADDR_OFFSET);
+    _currentAddress = *(uint16_t*)&pdu[P300_ADDR_OFFSET];
 }
 
-void Vcontrold::Framer::reset_actaddr()
+void Vcontrold::Framer::ResetActiveAddress()
 {
-    current_addr = FRAMER_NO_ADDR;
+    _currentAddress = FRAMER_NO_ADDR;
 }
 
-bool Vcontrold::Framer::CheckActAddr(std::vector<uint8_t> pdu)
+bool Vcontrold::Framer::CheckActiveAddress(std::vector<uint8_t>& pdu)
 {
-    return current_addr != *(uint16_t*)&pdu[P300_ADDR_OFFSET];
-}
-
-//TODO: could cause trouble on addr containing 0xFE
-void Vcontrold::Framer::set_result(char result)
-{
-    current_addr = (uint16_t)FRAMER_LINK_STATUS(result);
-}
-
-bool Vcontrold::Framer::PresetResult(std::vector<uint8_t> result)
-{
-    if (pid != P300_LEADIN || ((current_addr & FRAMER_LINK_STATUS(0)) != FRAMER_LINK_STATUS(0)))
-    {
-        std::string msg(">FRAMER: no preset result");
-        logIT(LOG_INFO, msg);
-        return false;
-    }
-
-    result[0] = (uint8_t)(current_addr ^ FRAMER_LINK_STATUS(0));
-    logIT(LOG_INFO, ">FRAMER: preset result %02X", result[0]);
-    return true;
+    return _currentAddress != *(uint16_t*)&pdu[P300_ADDR_OFFSET];
 }
 
 /*
@@ -132,7 +107,7 @@ int Vcontrold::Framer::close_p300()
 
         if ((result[0] == P300_INIT_OK) || (result[0] == P300_NOT_INIT))
         {
-            set_result(P300_NOT_INIT);
+            _linkStatus = P300_NOT_INIT;
             logIT(LOG_INFO, ">FRAMER: closed");
             return FRAMER_SUCCESS;
         }
@@ -143,7 +118,7 @@ int Vcontrold::Framer::close_p300()
         }
     }
 
-    set_result(P300_ERROR);
+    _linkStatus = P300_ERROR;
     logIT(LOG_ERR, ">FRAMER: could not close (%d attempts)", P300X_ATTEMPTS);
     return FRAMER_ERROR;
 }
@@ -167,13 +142,13 @@ int Vcontrold::Framer::open_p300()
 
         if (result[0] == P300_INIT_OK)
         {
-            set_result(P300_INIT_OK);
+            _linkStatus = P300_INIT_OK;
             logIT(LOG_INFO, ">FRAMER: opened");
             return FRAMER_SUCCESS;
         }
     }
 
-    set_result(P300_ERROR);
+    _linkStatus = P300_ERROR;
     logIT(LOG_ERR, ">FRAMER: could not close (%d attempts)", P300X_ATTEMPTS);
     return FRAMER_ERROR;
 }
@@ -211,56 +186,51 @@ static uint8_t framer_chksum(uint8_t* buf, int len)
  * | LEADIN | payload len | type | function | addr | exp len | chk |
  */
 
-int Vcontrold::Framer::send(char* s_buf, size_t len)
+void Vcontrold::Framer::Send(std::vector<uint8_t>& payload)
 {
-    if ((len < 1) || (!s_buf))
+    if (payload.size() < 1)
     {
-        logIT(LOG_ERR, ">FRAMER: invalid buffer %d %p", len, s_buf);
-        return FRAMER_ERROR;
+        std::string msg(">FRAMER: invalid payload");
+        logIT(LOG_ERR, msg);
+        throw FramerException(msg);
     }
 
-    if (pid != P300_LEADIN)
+    if (_pid != P300_LEADIN)
     {
-        std::vector<uint8_t> bytes(s_buf, s_buf + len);
-        _device.FlushReadAndSend(bytes);
-        return len;
+        _device.FlushReadAndSend(payload);
+        return;
     }
-    else if (len < 3)
+
+    if (payload.size() < 3)
     {
-        logIT(LOG_ERR, ">FRAMER: too few for P300");
-        return FRAMER_ERROR;
+        std::string msg(">FRAMER: too few for P300");
+        logIT(LOG_ERR, msg);
+        throw FramerException(msg);
     }
-    else
+
+    std::vector<uint8_t> bytes;
+
+    bytes.push_back(P300_LEADIN);
+    bytes.push_back((uint8_t)payload.size());
+    bytes.insert(bytes.end(), payload.begin(), payload.end());
+    bytes.push_back(framer_chksum(&bytes[P300_LEN_OFFSET], payload.size() + 1));
+
+    _device.FlushReadAndSend(bytes);
+
+    std::vector<uint8_t> result = _device.ReadNBytes(1);
+
+    if (result[0] != P300_INIT_OK)
     {
-        size_t pos = 0;
-        uint8_t l_buf[256];
-
-        l_buf[0] = P300_LEADIN;
-        l_buf[1] = (uint8_t)len; // only payload but len contains other bytes
-        l_buf[2] = s_buf[0]; // type
-        l_buf[3] = s_buf[1]; // function
-
-        for (pos = 0; pos < (len - 2); pos++)
-            l_buf[P300_ADDR_OFFSET + pos] = s_buf[pos + 2];
-
-        l_buf[P300_ADDR_OFFSET + pos] = framer_chksum(l_buf + 1,
-                                        len + P300_EXTRA_BYTES - 2);
-
-        std::vector<uint8_t> bytes(l_buf, l_buf + len + P300_EXTRA_BYTES);
-        _device.FlushReadAndSend(bytes);
-
-        std::vector<uint8_t> result = _device.ReadNBytes(1);
-
-        if (result[0] != P300_INIT_OK)
-        {
-            logIT(LOG_ERR, ">FRAMER: Error %02X", result[0]);
-            return FRAMER_ERROR;
-        }
-
-        set_actaddr(l_buf);
-        logIT(LOG_DEBUG, ">FRAMER: Command send");
-        return FRAMER_SUCCESS;
+        std::stringstream msgStream;
+        msgStream << ">FRAMER: Error " << std::hex << std::uppercase << std::setfill('0');
+        msgStream << std::setw(2) << static_cast<int>(result[0]);
+        std::string msg = msgStream.str();
+        logIT(LOG_ERR, msg);
+        throw FramerException(msg);
     }
+
+    SetActiveAddress(bytes);
+    logIT(LOG_DEBUG, ">FRAMER: Command send");
 }
 
 /*
@@ -296,35 +266,29 @@ std::vector<uint8_t> Vcontrold::Framer::receive(size_t r_len)
         throw FramerException(msg);
     }
 
-    if (PresetResult(result))
-    {
-        reset_actaddr();
-        return result;
-    }
-
-    if (pid != P300_LEADIN)
+    if (_pid != P300_LEADIN)
     {
         result = _device.ReadNBytes(r_len);
         return result;
     }
 
-    result = _device.ReadNBytes(r_len + 8);
+    result = _device.ReadNBytes(r_len + P300_EXTRA_BYTES + P300_RESP_EXTRA_BYTES);
     int total = result[1] + P300_EXTRA_BYTES;
 
-    char chk = framer_chksum(&result[1], total - 2);
+    char chk = framer_chksum(&result[P300_LEN_OFFSET], total - P300_NOCRC_BYTES);
 
-    if (result[total - 1] != chk)
+    if (result.back() != chk)
     {
-        reset_actaddr();
+        ResetActiveAddress();
         char string[256];
-        snprintf(string, sizeof(string), ">FRAMER: read chksum error received 0x%02X calc 0x%02X", result[total - 1], chk);
+        snprintf(string, sizeof(string), ">FRAMER: read chksum error received 0x%02X calc 0x%02X", result.back(), chk);
         logIT(LOG_ERR, string);
         throw FramerException(string);
     }
 
     if (result[P300_TYPE_OFFSET] == P300_ERROR_REPORT)
     {
-        reset_actaddr();
+        ResetActiveAddress();
         char string[256];
         snprintf(string, sizeof(string), ">FRAMER: ERROR address %02X%02X code %d",
                  result[P300_ADDR_OFFSET], result[P300_ADDR_OFFSET + 1],
@@ -335,7 +299,7 @@ std::vector<uint8_t> Vcontrold::Framer::receive(size_t r_len)
 
     if (r_len != result[P300_RESP_LEN_OFFSET])
     {
-        reset_actaddr();
+        ResetActiveAddress();
         char string[256];
         snprintf(string, sizeof(string), ">FRAMER: unexpected length %d %02X",
                  result[P300_RESP_LEN_OFFSET], result[P300_RESP_LEN_OFFSET]);
@@ -345,9 +309,9 @@ std::vector<uint8_t> Vcontrold::Framer::receive(size_t r_len)
 
 
     // TODO: could add check for address receive matching address send before
-    if (CheckActAddr(result))
+    if (CheckActiveAddress(result))
     {
-        reset_actaddr();
+        ResetActiveAddress();
         std::string msg(">FRAMER: not matching response addr");
         logIT(LOG_ERR, msg);
         throw FramerException(msg);
@@ -371,18 +335,12 @@ std::vector<uint8_t> Vcontrold::Framer::receive(size_t r_len)
     }
 
     std::vector<uint8_t> ret(&result[P300_BUFFER_OFFSET], &result[P300_BUFFER_OFFSET + r_len]);
-    reset_actaddr();
+    ResetActiveAddress();
     return ret;
 }
 
-void Vcontrold::Framer::WaitFor(std::vector<uint8_t> bytes)
+void Vcontrold::Framer::WaitFor(std::vector<uint8_t>& bytes)
 {
-    if (PresetResult(bytes))
-    {
-        reset_actaddr();
-        return;
-    }
-
     _device.WaitFor(bytes);
 }
 
@@ -408,16 +366,30 @@ int Vcontrold::Framer::OpenDevice(char pid)
         }
     }
 
-    this->pid = pid;
+    this->_pid = pid;
     return 1;
 }
 
 void Vcontrold::Framer::CloseDevice()
 {
-    if (pid == P300_LEADIN)
+    if (_pid == P300_LEADIN)
         close_p300();
 
-    pid = 0;
+    _pid = 0;
     _device.CloseConnection();
+}
+
+
+void Vcontrold::Framer::ResetDevice()
+{
+    _device.ResetDevice();
+    _linkStatus = P300_NOT_INIT;
+    usleep(500000);
+    OpenDevice(_pid);
+}
+
+bool Vcontrold::Framer::IsOpen()
+{
+    return _device.IsOpen() && _linkStatus == P300_INIT_OK;
 }
 

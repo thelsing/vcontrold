@@ -25,6 +25,7 @@ namespace Vcontrold
 
         void OpenConnection();
         void CloseConnection();
+        void ResetDevice();
 
         std::vector<uint8_t> ReadBytes(int count);
         void WriteBytes(const std::vector<uint8_t>& bytes);

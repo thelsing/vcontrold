@@ -36,9 +36,9 @@ namespace Vcontrold
         Framer(const std::string dev) : _device(dev) {};
         virtual ~Framer() {};
 
-        int send(char* s_buf, size_t len);
+        void Send(std::vector<uint8_t>& bytes);
 
-        void WaitFor(std::vector<uint8_t> bytes);
+        void WaitFor(std::vector<uint8_t>& bytes);
 
         std::vector<uint8_t> receive(size_t r_len);
 
@@ -46,27 +46,25 @@ namespace Vcontrold
 
         void CloseDevice();
 
-        bool isOpen()
-        {
-            return _device.IsOpen();
-        };
+        void ResetDevice();
 
-        Optolink& device()
+        bool IsOpen();
+
+        Optolink& Device()
         {
             return _device;
         };
     private:
         int close_p300();
         int open_p300();
-        void set_actaddr(void* pdu);
-        void reset_actaddr();
-        bool CheckActAddr(std::vector<uint8_t> pdu);
-        void set_result(char result);
-        bool PresetResult(std::vector<uint8_t> result);
+        void SetActiveAddress(std::vector<uint8_t>& pdu);
+        void ResetActiveAddress();
+        bool CheckActiveAddress(std::vector<uint8_t>& pdu);
 
         Optolink _device;
-        uint16_t current_addr = FRAMER_NO_ADDR; // stored value depends on Endianess
-        char pid = 0;	  // current active protocol
+        uint16_t _currentAddress = FRAMER_NO_ADDR; // stored value depends on Endianess
+        char _pid = 0;	  // current active protocol
+        uint8_t _linkStatus = 0;
     };
 }
 

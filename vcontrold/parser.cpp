@@ -190,6 +190,7 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
 
 
                 case SEND:
+                {
                     _len = 0;
 
                     while (1)
@@ -203,15 +204,13 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
                         cmpPtr = cmpPtr->next;
                     }
 
-                    if (!framer.send(out_buff, _len))
-                    {
-                        logIT(LOG_ERR, "Fehler send, Abbruch");
-                        return (-1);
-                    }
+                    std::vector<uint8_t> bytes(out_buff, out_buff + _len);
+                    framer.Send(bytes);
 
                     bzero(string, sizeof(string));
                     char2hex(string, out_buff, _len);
                     break;
+                }
 
                 case RECV:
                 {
@@ -310,7 +309,7 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
                     if (sendLen)
                     {
                         std::vector<uint8_t> bytes(sendBuf, sendBuf + sendLen);
-                        framer.device().FlushReadAndSend(bytes);
+                        framer.Device().FlushReadAndSend(bytes);
 
                         char2hex(string, sendBuf, sendLen);
                     }
@@ -318,7 +317,7 @@ int execByteCode(commandPtr cmdPtr, Vcontrold::Framer& framer, char* recvBuf, si
                     else if (cmpPtr->len)
                     {
                         std::vector<uint8_t> bytes(cmpPtr->send, cmpPtr->send + cmpPtr->len);
-                        framer.device().FlushReadAndSend(bytes);
+                        framer.Device().FlushReadAndSend(bytes);
 
                         bzero(string, sizeof(string));
                         char2hex(string, cmpPtr->send, cmpPtr->len);

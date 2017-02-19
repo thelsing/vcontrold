@@ -252,7 +252,7 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
     /* das Device wird erst geoeffnet, wenn wir was zu tun haben */
     /* aber nur, falls es nicht schon offen ist */
 
-    if (!framerPtr->isOpen())
+    if (!framerPtr->IsOpen())
     {
 
         if (framerPtr->OpenDevice(cfgPtr->protoPtr->id) == -1)
@@ -271,33 +271,45 @@ std::string runCommand(commandPtr cPtr, const char* para, short noUnit)
         	   -1 -> Fehler
         	0 -> Formaterierter String
         	n -> Bytes in Rohform */
-
         count = execByteCode(cPtr, *framerPtr, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit);
 
-        if (count == -1)
-            logIT(LOG_ERR, "Fehler beim ausfuehren von %s", cPtr->name);
-        else if (*recvBuf && (count == 0))   /* Unit gewandelt */
-        {
-            logIT(LOG_INFO, "%s", recvBuf);
-            result = std::string(recvBuf);
-        }
-        else
-        {
-            char buffer[MAXBUF];
-
-            count = char2hex(buffer, recvBuf, count);
-
-            if (count)
-            {
-                result = std::string(buffer);
-                logIT(LOG_INFO, "Empfangen: %s", buffer);
-            }
-        }
     }
     catch (std::exception& e)
     {
         logIT(LOG_ERR, "Exception: %s", e.what());
+        logIT(LOG_ERR, "Resetting device and retrying");
+
+        try
+        {
+            framerPtr->ResetDevice();
+            count = execByteCode(cPtr, *framerPtr, recvBuf, sizeof(recvBuf), sendBuf, sendLen, noUnit);
+        }
+        catch (std::exception& e)
+        {
+            logIT(LOG_ERR, "Exception on retry: %s", e.what());
+        }
     }
+
+    if (count == -1)
+        logIT(LOG_ERR, "Fehler beim ausfuehren von %s", cPtr->name);
+    else if (*recvBuf && (count == 0))   /* Unit gewandelt */
+    {
+        logIT(LOG_INFO, "%s", recvBuf);
+        result = std::string(recvBuf);
+    }
+    else
+    {
+        char buffer[MAXBUF];
+
+        count = char2hex(buffer, recvBuf, count);
+
+        if (count)
+        {
+            result = std::string(buffer);
+            logIT(LOG_INFO, "Empfangen: %s", buffer);
+        }
+    }
+
 
     pthread_mutex_unlock(&device_mutex);
     pthread_mutex_unlock(&config_mutex);

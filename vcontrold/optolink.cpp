@@ -11,6 +11,16 @@
 #include <sys/times.h>
 #include <sys/ioctl.h>
 #include <sstream>
+#include <stdlib.h>
+#include <sstream>
+#include <string>
+#include <stdio.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <linux/limits.h>
+#include <linux/usbdevice_fs.h>
 
 #include "common.h"
 #include "io.h"
@@ -83,10 +93,9 @@ std::vector<uint8_t> Vcontrold::Optolink::ReadNBytes(size_t bytesToRead)
     int retval;
 
     struct tms tms_t;
-    clock_t start, end, mid, mid1;
+    clock_t start, end;
     double clktck = (double)sysconf(_SC_CLK_TCK);
     start = times(&tms_t);
-    mid1 = start;
 
     i = 0;
     std::vector<uint8_t> result(bytesToRead);
@@ -157,19 +166,14 @@ std::vector<uint8_t> Vcontrold::Optolink::ReadNBytes(size_t bytesToRead)
                 }
             }
             else
-            {
-                mid = times(&tms_t);
-                logIT(LOG_INFO, "<RECV: len=%zd %02X (%0.1f ms)", len, result[i], ((double)(mid - mid1) / clktck) * 1000);
-                mid1 = mid;
                 i += (size_t)len;
-            }
         }
         else
             continue;
     }
 
     end = times(&tms_t);
-    long etime = (unsigned long)((double)(end - start) / clktck) * 1000;
+    double etime = ((double)(end - start) / clktck) * 1000;
     setblock(_fd);
 
     std::stringstream msgStream;
@@ -267,6 +271,117 @@ void Vcontrold::Optolink::CloseConnection()
 {
     close(_fd);
     _fd = 0;
+}
+
+void Vcontrold::Optolink::ResetDevice()
+{
+    CloseConnection();
+
+    int fd;
+    int rc;
+    char buff[PATH_MAX];
+    ssize_t retVal;
+
+    std::stringstream pathBuff;
+    pathBuff << "/sys/dev/";
+
+    struct stat fs;
+    stat(_devicePath.c_str(), &fs);
+
+    if (S_ISCHR(fs.st_mode))
+        pathBuff << "char/";
+    else
+        pathBuff << "block/";
+
+    pathBuff << major(fs.st_rdev);
+    pathBuff << ":";
+    pathBuff << minor(fs.st_rdev);
+
+    std::string path = pathBuff.str();
+    realpath(path.c_str(), buff);
+
+    pathBuff.str("");
+    pathBuff.clear();
+    pathBuff << buff << "/../../../..";
+    path = pathBuff.str();
+    realpath(path.c_str(), buff);
+    path = buff;
+
+    pathBuff.str("");
+    pathBuff.clear();
+    pathBuff << path << "/busnum";
+
+
+    std::string tmp = pathBuff.str();
+
+    fd = open(tmp.c_str(), O_RDONLY);
+
+    if (fd < 0)
+    {
+        std::string msg("error reading file busnum");
+        logIT(LOG_ERR, msg);
+        throw OptoLinkException(msg);
+    }
+
+    retVal = read(fd, buff, 3);
+    buff[retVal] = 0;
+    close(fd);
+    int busNum = atoi(buff);
+
+    pathBuff.str("");
+    pathBuff.clear();
+    pathBuff << path << "/devnum";
+
+    tmp = pathBuff.str();
+
+    fd = open(tmp.c_str(), O_RDONLY);
+
+    if (fd < 0)
+    {
+        std::string msg("error reading file devnum");
+        logIT(LOG_ERR, msg);
+        throw OptoLinkException(msg);
+    }
+
+    retVal = read(fd, buff, 3);
+    buff[retVal] = 0;
+    close(fd);
+    int devNum = atoi(buff);
+
+
+    pathBuff.str("");
+    pathBuff.clear();
+    pathBuff << "/dev/bus/usb/";
+    sprintf(buff, "%03d", busNum);
+    pathBuff << buff << "/";
+    sprintf(buff, "%03d", devNum);
+    pathBuff << buff;
+
+    path = pathBuff.str();
+    const char* filename = path.c_str();
+
+    fd = open(filename, O_WRONLY);
+
+    if (fd < 0)
+    {
+        std::string msg("Error opening output file");
+        logIT(LOG_ERR, msg);
+        throw OptoLinkException(msg);
+    }
+
+    logIT(LOG_INFO, "Resetting USB device %s", filename);
+    rc = ioctl(fd, USBDEVFS_RESET, 0);
+
+    if (rc < 0)
+    {
+        std::string msg("Error in ioctl");
+        logIT(LOG_ERR, msg);
+        throw OptoLinkException(msg);
+    }
+
+    logIT(LOG_INFO, "Reset successful");
+
+    close(fd);
 }
 
 static jmp_buf	env_alrm;
